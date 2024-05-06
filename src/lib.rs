@@ -4,17 +4,18 @@ use std::{
     slice::Iter,
 };
 
-use bevy_app::{self, App, FixedPreUpdate, Plugin};
+use bevy_app::{self, App, Plugin, PostUpdate};
 use bevy_ecs::{
     bundle::Bundle,
     component::{Component, TableStorage},
     entity::Entity,
     query::{QueryFilter, ReadOnlyQueryData},
-    schedule::ScheduleLabel,
-    system::{Commands, EntityCommands, Local, Query, Res, ResMut, Resource, SystemParam},
+    schedule::{IntoSystemConfigs, ScheduleLabel, SystemSet},
+    system::{Commands, EntityCommands, Local, Query, Res, Resource, SystemParam},
     world::World,
 };
 use bevy_utils::intern::Interned;
+use event_listener::Target;
 
 // WIP: Won't Ieven Pfinish
 pub mod event_listener {
@@ -34,8 +35,13 @@ pub mod prelude {
 }
 
 pub trait SendEventExt {
+    /// Spawn an entity and push it to the `Events` resource. Returns the `EntityCommands` of the spawned event.
     fn send_event(&mut self, event: impl Bundle) -> EntityCommands;
-    fn send_entity_event(&mut self, target: Entity, event: impl Bundle) -> EntityCommands;
+}
+
+pub trait SendEntityEventExt {
+    /// Same as `Commands::send_event((Target(..), ..))` except this returns `&mut Self` instead of the `EntityCommands` of the spawned event.
+    fn send_event(&mut self, event: impl Bundle) -> &mut Self;
 }
 
 impl<'w, 's> SendEventExt for Commands<'w, 's> {
@@ -47,17 +53,24 @@ impl<'w, 's> SendEventExt for Commands<'w, 's> {
         });
         self.entity(entity)
     }
+}
 
-    fn send_entity_event(&mut self, target: Entity, event: impl Bundle) -> EntityCommands {
-        todo!()
+impl<'a> SendEntityEventExt for EntityCommands<'a> {
+    fn send_event(&mut self, event: impl Bundle) -> &mut Self {
+        let target = self.id();
+        self.commands().send_event((Target(target), event));
+        self
     }
 }
+
+#[derive(SystemSet, PartialEq, Eq, Hash, Clone, Debug)]
+pub struct UpdateEvents;
 
 pub struct EventPlugin(Interned<dyn ScheduleLabel>);
 
 impl Default for EventPlugin {
     fn default() -> Self {
-        Self(FixedPreUpdate.intern())
+        Self(PostUpdate.intern())
     }
 }
 
@@ -70,8 +83,21 @@ impl EventPlugin {
 impl Plugin for EventPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Events>();
-        app.add_systems(self.0.clone(), |mut events: ResMut<Events>| events.update());
+
+        app.add_systems(self.0.clone(), update_events.in_set(UpdateEvents));
     }
+}
+
+// TODO: events should only update once the fixed schedule has finished at least once since the last update.
+// If not then events may be missed if listened to from a system in fixed schedule.
+fn update_events(world: &mut World) {
+    world.resource_scope::<Events, _>(|world, mut events| {
+        for entity in events.update_drain() {
+            if let Some(entity) = world.get_entity_mut(entity) {
+                entity.despawn(); // TODO: should this be recursive?
+            }
+        }
+    });
 }
 
 struct Event;
@@ -79,7 +105,7 @@ struct Event;
 impl Component for Event {
     type Storage = TableStorage;
 
-    // TODO: add an `on_add` thingy for `Event` to add it to the `Events` resource once 0.14 drops.
+    // TODO: add an `on_add` thingy for `Event` to add it to the `Events` resource automatically once 0.14 drops.
 }
 
 #[derive(Debug, Default)]
