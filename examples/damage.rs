@@ -43,8 +43,6 @@ fn enemy() -> impl Bundle {
     (Enemy, Health::new(5), Armor(2), DeathDefiance)
 }
 
-// events
-
 #[derive(Component, Debug)]
 struct Attack {
     damage: u32,
@@ -52,7 +50,7 @@ struct Attack {
 
 #[derive(Component)]
 struct Kill {
-    // events can reference other events.
+    // Events can reference other events.
     attack: Option<Entity>,
 }
 
@@ -66,35 +64,8 @@ fn attack_enemy(
     key: Res<ButtonInput<KeyCode>>,
 ) {
     if key.just_pressed(KeyCode::Space) {
+        // Events are sent with `Commands` instead of an `EventWriter`.
         commands.send_event((Attack { damage: 1 }, Target(enemy.single())));
-    }
-}
-
-fn block_attack(
-    mut commands: Commands,
-    mut events: QueryEventReader<(Entity, &Target), With<Attack>>,
-    mut attacks: Query<&mut Attack>, // this sucks i know
-    mut query: Query<&mut Armor>,
-) {
-    for (event, &Target(target)) in events.read() {
-        let mut attack = attacks.get_mut(event).unwrap();
-        let Ok(mut armor) = query.get_mut(target) else {
-            continue;
-        };
-        let new_armor = armor.0.saturating_sub(attack.damage);
-        info!(
-            "{target:?} blocked the attack, armor = {} - {} = {new_armor}",
-            armor.0, attack.damage
-        );
-        attack.damage = attack.damage.saturating_sub(armor.0);
-        armor.0 = new_armor;
-
-        if attack.damage == 0 {
-            commands.entity(event).despawn();
-        }
-        if armor.0 == 0 {
-            commands.entity(target).remove::<Armor>();
-        }
     }
 }
 
@@ -124,21 +95,6 @@ fn process_attack(
     }
 }
 
-fn defy_death(
-    mut commands: Commands,
-    mut events: QueryEventReader<(Entity, &Target), With<Kill>>,
-    mut query: Query<&mut Health, With<DeathDefiance>>,
-) {
-    for (kill, &Target(target)) in events.read() {
-        if let Ok(mut health) = query.get_mut(target) {
-            health.value = health.max;
-            info!("{target:?} defied death, health = {}", health.value);
-            commands.entity(kill).despawn();
-            commands.entity(target).remove::<DeathDefiance>();
-        }
-    }
-}
-
 fn process_kill(
     mut commands: Commands,
     mut events: QueryEventReader<(&Kill, &Target)>,
@@ -157,5 +113,49 @@ fn process_kill(
         // respawn enemy
         commands.entity(target).despawn();
         commands.spawn(enemy());
+    }
+}
+
+fn block_attack(
+    mut commands: Commands,
+    mut events: QueryEventReader<(Entity, &Target), With<Attack>>,
+    // Since the query in `QueryEventReader` is read-only, we must specify a new query to modify components in an event.
+    mut attacks: Query<&mut Attack>,
+    mut query: Query<&mut Armor>,
+) {
+    for (event, &Target(target)) in events.read() {
+        let mut attack = attacks.get_mut(event).unwrap();
+        let Ok(mut armor) = query.get_mut(target) else {
+            continue;
+        };
+        let new_armor = armor.0.saturating_sub(attack.damage);
+        info!(
+            "{target:?} blocked the attack, armor = {} - {} = {new_armor}",
+            armor.0, attack.damage
+        );
+        attack.damage = attack.damage.saturating_sub(armor.0);
+        armor.0 = new_armor;
+
+        if attack.damage == 0 {
+            commands.entity(event).despawn();
+        }
+        if armor.0 == 0 {
+            commands.entity(target).remove::<Armor>();
+        }
+    }
+}
+
+fn defy_death(
+    mut commands: Commands,
+    mut events: QueryEventReader<(Entity, &Target), With<Kill>>,
+    mut query: Query<&mut Health, With<DeathDefiance>>,
+) {
+    for (kill, &Target(target)) in events.read() {
+        if let Ok(mut health) = query.get_mut(target) {
+            health.value = health.max;
+            info!("{target:?} defied death, health = {}", health.value);
+            commands.entity(kill).despawn();
+            commands.entity(target).remove::<DeathDefiance>();
+        }
     }
 }
