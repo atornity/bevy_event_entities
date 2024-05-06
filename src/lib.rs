@@ -4,9 +4,10 @@ use std::{
     slice::Iter,
 };
 
-use bevy_app::{self, App, First, FixedPreUpdate, Plugin};
+use bevy_app::{self, App, FixedPreUpdate, Plugin};
 use bevy_ecs::{
     bundle::Bundle,
+    component::{Component, TableStorage},
     entity::Entity,
     query::{QueryFilter, ReadOnlyQueryData},
     schedule::ScheduleLabel,
@@ -71,6 +72,14 @@ impl Plugin for EventPlugin {
         app.init_resource::<Events>();
         app.add_systems(self.0.clone(), |mut events: ResMut<Events>| events.update());
     }
+}
+
+struct Event;
+
+impl Component for Event {
+    type Storage = TableStorage;
+
+    // TODO: add an `on_add` thingy for `Event` to add it to the `Events` resource once 0.14 drops.
 }
 
 #[derive(Debug, Default)]
