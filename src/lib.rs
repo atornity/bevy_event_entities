@@ -4,23 +4,23 @@ use std::{
     slice::Iter,
 };
 
-use bevy_app::{self, App, Plugin, PostUpdate};
+use bevy_app::prelude::*;
 use bevy_ecs::{
-    bundle::Bundle,
-    component::{Component, TableStorage},
-    entity::Entity,
+    component::TableStorage,
+    prelude::*,
     query::{QueryFilter, ReadOnlyQueryData},
-    schedule::{IntoSystemConfigs, ScheduleLabel, SystemSet},
-    system::{Commands, EntityCommands, Local, Query, Res, Resource, SystemParam},
-    world::World,
+    schedule::ScheduleLabel,
+    system::{EntityCommands, SystemParam},
 };
 use bevy_utils::intern::Interned;
 
-// WIP: Won't Ieven Pfinish
 pub mod event_listener;
 
 pub mod prelude {
-    pub use crate::{EntityEventReader, EventPlugin, QueryEventReader, SendEventExt};
+    pub use crate::{
+        event_listener::{EventInput, On, SendEntityEventExt},
+        EntityEventReader, EventPlugin, QueryEventReader, SendEventExt,
+    };
 }
 
 pub trait SendEventExt {
