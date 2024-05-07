@@ -1,28 +1,21 @@
-use std::{
-    marker::PhantomData,
-    ops::{Deref, DerefMut},
-};
+use std::marker::PhantomData;
 
-use bevy_app::{Plugin, PostUpdate, Update};
+use bevy_app::{Plugin, PostUpdate};
 use bevy_ecs::{
     bundle::Bundle,
     component::{Component, TableStorage},
     entity::Entity,
-    query::{
-        Or, QueryData, QueryFilter, QueryItem, ROQueryItem, ReadOnlyQueryData, With, WorldQuery,
-    },
-    schedule::{IntoSystemConfigs, IntoSystemSetConfigs, SystemSet},
+    query::{QueryData, QueryFilter, QueryItem, ROQueryItem, With},
+    schedule::{IntoSystemConfigs, SystemSet},
     system::{
-        BoxedSystem, CommandQueue, Commands, EntityCommands, IntoSystem, Local, Query, Res, ResMut,
-        Resource, SystemParam, SystemState,
+        BoxedSystem, Commands, EntityCommands, IntoSystem, Query, Res, Resource, SystemParam,
     },
-    world::{EntityRef, World},
+    world::World,
 };
 use bevy_hierarchy::Parent;
-use bevy_log::warn;
 use bevy_reflect::Reflect;
 
-use crate::{EventSystems, Events, ManualEventReader, QueryEventReader, SendEventExt};
+use crate::{QueryEventReader, SendEventExt};
 
 pub trait SendEntityEventExt {
     /// Same as `Commands::send_event((Target(..), ..))` except this returns `&mut Self` instead of the `EntityCommands` of the spawned event.
