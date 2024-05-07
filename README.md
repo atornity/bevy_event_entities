@@ -6,7 +6,7 @@
 
 All events are stored in the same `EventEntities` resource which means the ordering of events are predictable even if they are of different types.
 
-Events are just entities so you can add arbitrary component to events.
+Events are just entities so you can add arbitrary components to events.
 
 ## Possibly outdated example
 
