@@ -14,6 +14,9 @@ use bevy_ecs::{
 use bevy_reflect::Reflect;
 use bevy_utils::intern::Interned;
 
+#[cfg(test)]
+mod tests;
+
 pub mod event_listener;
 
 pub mod prelude {
