@@ -49,6 +49,7 @@ impl Plugin for EventPlugin {
 
 // TODO: events should only update once the fixed schedule has finished at least once since the last update.
 // If not then events may be missed if listened to from a system in fixed schedule.
+// (They may still be missed from systems with run conditions, like `on_timer`)
 fn update_events(world: &mut World) {
     world.resource_scope::<EventEntities, _>(|world, mut events| {
         for entity in events.update_drain() {
