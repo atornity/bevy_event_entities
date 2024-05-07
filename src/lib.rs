@@ -15,20 +15,9 @@ use bevy_ecs::{
     world::World,
 };
 use bevy_utils::intern::Interned;
-use event_listener::Target;
 
 // WIP: Won't Ieven Pfinish
-pub mod event_listener {
-    use bevy_ecs::{component::Component, entity::Entity};
-
-    #[derive(Debug, Component)]
-    /// Add this to an event to make it listenable.
-    pub struct Target(pub Entity);
-
-    /// Useful for things like attacks etc.
-    #[derive(Debug, Component)]
-    pub struct Instigator(pub Entity);
-}
+pub mod event_listener;
 
 pub mod prelude {
     pub use crate::{EntityEventReader, EventPlugin, QueryEventReader, SendEventExt};
@@ -37,11 +26,6 @@ pub mod prelude {
 pub trait SendEventExt {
     /// Spawn an entity and push it to the `Events` resource. Returns the `EntityCommands` of the spawned event.
     fn send_event(&mut self, event: impl Bundle) -> EntityCommands;
-}
-
-pub trait SendEntityEventExt {
-    /// Same as `Commands::send_event((Target(..), ..))` except this returns `&mut Self` instead of the `EntityCommands` of the spawned event.
-    fn send_event(&mut self, event: impl Bundle) -> &mut Self;
 }
 
 impl<'w, 's> SendEventExt for Commands<'w, 's> {
@@ -55,16 +39,8 @@ impl<'w, 's> SendEventExt for Commands<'w, 's> {
     }
 }
 
-impl<'a> SendEntityEventExt for EntityCommands<'a> {
-    fn send_event(&mut self, event: impl Bundle) -> &mut Self {
-        let target = self.id();
-        self.commands().send_event((Target(target), event));
-        self
-    }
-}
-
 #[derive(SystemSet, PartialEq, Eq, Hash, Clone, Debug)]
-pub struct UpdateEvents;
+pub struct EventSystems;
 
 pub struct EventPlugin(Interned<dyn ScheduleLabel>);
 
@@ -84,7 +60,7 @@ impl Plugin for EventPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Events>();
 
-        app.add_systems(self.0.clone(), update_events.in_set(UpdateEvents));
+        app.add_systems(self.0.clone(), update_events.in_set(EventSystems));
     }
 }
 

@@ -1,25 +1,25 @@
-# Events as entities
+# Events as entities blabla
 
-`bevy_events_as_entities` is an alternative to the built in event system in bevy, each event is an entity which can have one or more components which make up an event.
+`bevy_events_as_entities` is a proof of concept alternative to the built in event system in bevy, each event is an entity which can have one or more components which make up an event.
 
-All events are stored in the same `Events` resource which means the ordering of events are predictable even if they are of different types. This is a known limitation of the built in event system as of bevy 0.13.
+## How is this different from the built in system?
 
-## Benefits
+All events are stored in the same `Events` (not to be confused with bevy::ecs::event::Event) resource which means the ordering of events are predictable even if they are of different types.
 
-- mutable event state
-- consistent ordering
+Events are entities so you can add arbitrary component to events.
 
-## Beep Boop
+## Possibly outdated example
 
 ```rust
 fn main() {
     App::new()
+        // Just add the plugin, no need to add every possible event.
         .add_plugins(EventPlugin::default())
         .add_systems(Update, (attack_enemy, deal_damage).chain())
         .run();
 }
 
-// we derive `Component` instead of `Event` since events are just entities with components.
+// We derive `Component` instead of `Event` since events are just entities with components.
 #[derive(Component)]
 struct Attack {
     damage: u32,
@@ -54,6 +54,20 @@ fn deal_damage(
         health.value = health.value.saturating_sub(damage);
     }
 }
-```
 
-A lot of the code in this repo was copy-pasted from the bevy repo, simply replacing the event data with `Entity`.
+#[derive(Component)]
+struct Health {
+    value: u32
+}
+
+#[derive(Component)]
+struct Player;
+
+#[derive(Component)]
+struct Enemy;
+
+fn setup(mut commands: Commands) {
+    commands.spawn(Player);
+    commands.spawn((Enemy, Health { value: 10 }));
+}
+```
