@@ -81,6 +81,6 @@ This crate also offers an event listener implementation (think [bevy_eventlisten
 The only benefit of this over [bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) is that you can mix and match callbacks with regular event readers.
 For example, you can have `On` components which may mutate the damage of an `Attack` event.
 You can then have a system which reads this updated `Attack` damage and uses it to substract the `Health` of the target.
-This runs on all entities with a `Health` components regardless of whether or not they have a callback component (This is something I tried to do which motivated me to create this crate).
+This runs on all entities with a `Health` components regardless of whether or not they have a callback component (This is something I tried to do which motivated me to make this crate).
 
 [bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) is generally a lot more feature complete in every other way.
