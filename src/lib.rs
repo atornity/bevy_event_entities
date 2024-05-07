@@ -23,22 +23,6 @@ pub mod prelude {
     };
 }
 
-pub trait SendEventExt {
-    /// Spawn an entity and push it to the `Events` resource. Returns the `EntityCommands` of the spawned event.
-    fn send_event(&mut self, event: impl Bundle) -> EntityCommands;
-}
-
-impl<'w, 's> SendEventExt for Commands<'w, 's> {
-    fn send_event(&mut self, event: impl Bundle) -> EntityCommands {
-        let entity = self.spawn_empty().id();
-        self.add(move |world: &mut World| {
-            world.resource_mut::<EventEntities>().send(entity);
-            world.entity_mut(entity).insert((Event, event));
-        });
-        self.entity(entity)
-    }
-}
-
 #[derive(SystemSet, PartialEq, Eq, Hash, Clone, Debug)]
 pub struct EventSystems;
 
@@ -73,6 +57,22 @@ fn update_events(world: &mut World) {
             }
         }
     });
+}
+
+pub trait SendEventExt {
+    /// Spawn an entity and push it to the `Events` resource. Returns the `EntityCommands` of the spawned event.
+    fn send_event(&mut self, event: impl Bundle) -> EntityCommands;
+}
+
+impl<'w, 's> SendEventExt for Commands<'w, 's> {
+    fn send_event(&mut self, event: impl Bundle) -> EntityCommands {
+        let entity = self.spawn_empty().id();
+        self.add(move |world: &mut World| {
+            world.resource_mut::<EventEntities>().send(entity);
+            world.entity_mut(entity).insert((Event, event));
+        });
+        self.entity(entity)
+    }
 }
 
 #[derive(Component, Reflect, Debug, Clone, Copy)]
