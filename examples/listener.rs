@@ -86,7 +86,7 @@ fn block_or_take_damage(
     }
 
     match new_damage == 0 {
-        true => commands.entity(attack_input.id()).despawn(),
+        true => commands.entity(attack_input.event()).despawn(),
         false => attack_input.get_mut().damage = new_damage,
     }
 }

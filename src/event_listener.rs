@@ -62,7 +62,6 @@ pub struct Instigator(pub Entity);
 
 #[derive(Resource, Debug, PartialEq, Clone)]
 pub struct ListenerInput {
-    // TODO: event data
     pub event: Entity,
     pub target: Entity,
 }
@@ -86,12 +85,20 @@ impl<'w, 's, D: QueryData, F: QueryFilter> EventInput<'w, 's, D, F> {
         self.query.get_mut(self.input.event).unwrap()
     }
 
-    pub fn id(&self) -> Entity {
+    pub fn event(&self) -> Entity {
         self.input.event
     }
 
     pub fn target(&self) -> Entity {
         self.input.target
+    }
+
+    pub fn query(&self) -> &Query<'w, 's, D, F> {
+        &self.query
+    }
+
+    pub fn query_mut(&mut self) -> &mut Query<'w, 's, D, F> {
+        &mut self.query
     }
 }
 
@@ -129,7 +136,6 @@ impl CallbackSystem {
     }
 }
 
-// TODO: T: QueryData or T: Component ??? or T: SomeTupleTrait
 #[derive(Component)]
 pub struct On<T: Component> {
     callbacks: Vec<CallbackSystem>,
