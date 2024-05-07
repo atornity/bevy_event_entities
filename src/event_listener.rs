@@ -94,7 +94,6 @@ pub struct Instigator(pub Entity);
 
 #[derive(Resource, Debug, PartialEq, Clone)]
 pub struct ListenerInput {
-    // TODO: event data
     pub event: Entity,
     pub target: Entity,
 }
@@ -126,6 +125,14 @@ impl<'w, 's, D: QueryData, F: QueryFilter> EventInput<'w, 's, D, F> {
 
     pub fn target(&self) -> Entity {
         self.input.target
+    }
+
+    pub fn query(&self) -> &Query<'w, 's, D, F> {
+        &self.query
+    }
+
+    pub fn query_mut(&mut self) -> &mut Query<'w, 's, D, F> {
+        &mut self.query
     }
 }
 

@@ -13,7 +13,6 @@ use bevy_ecs::{
     schedule::ScheduleLabel,
     system::{EntityCommands, SystemParam},
 };
-use bevy_hierarchy::DespawnRecursiveExt;
 use bevy_reflect::Reflect;
 
 pub mod event_listener;
