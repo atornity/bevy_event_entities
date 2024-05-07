@@ -1,10 +1,10 @@
 # Events as entities blabla
 
-`bevy_events_as_entities` is a proof of concept alternative to the built in event system in bevy, each event is an entity which can have one or more components which make up an event.
+`bevy_events_as_entities` is a simple alternative to the built in event system in bevy, each event is an entity which can have one or more components which make up an event.
 
 ## How is this different from the built in system?
 
-All events are stored in the same `Events` (not to be confused with bevy::ecs::event::Event) resource which means the ordering of events are predictable even if they are of different types.
+All events are stored in the same `Events` (not to be confused with `bevy::ecs::event::Event`) resource which means the ordering of events are predictable even if they are of different types.
 
 Events are entities so you can add arbitrary component to events.
 
@@ -71,3 +71,5 @@ fn setup(mut commands: Commands) {
     commands.spawn((Enemy, Health { value: 10 }));
 }
 ```
+
+See also [minimal.rs](https://github.com/atornity/bevy_events_as_entities/blob/master/examples/minimal.rs), [damage.rs](https://github.com/atornity/bevy_events_as_entities/blob/master/examples/damage.rs) and [listener.rs](https://github.com/atornity/bevy_events_as_entities/blob/master/examples/listener.rs).
