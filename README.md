@@ -78,4 +78,7 @@ See also [minimal.rs](https://github.com/atornity/bevy_events_as_entities/blob/m
 
 This crate also offers an event listener implementation (think [bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) made to work with this crate).
 
-The only benefit of using this over [bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) is that you can mix and match callbacks with regular event readers. For example, you can have `On` components which may mutate the damage of an `Attack` event. You can then have a system which reads this updated `Attack` damage and uses it to substract the `Health` of the target. This runs on all entities with a `Health` components regardless of whether or not they have a callback component (This is something I tried to do which motivated me to create this crate).
+The only benefit of using this over [bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) is that you can mix and match callbacks with regular event readers. 
+For example, you can have `On` components which may mutate the damage of an `Attack` event. 
+You can then have a system which reads this updated `Attack` damage and uses it to substract the `Health` of the target. 
+This runs on all entities with a `Health` components regardless of whether or not they have a callback component (This is something I tried to do which motivated me to create this crate).
