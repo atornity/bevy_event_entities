@@ -68,28 +68,17 @@ pub trait SendEventExt {
 
 impl<'w, 's> SendEventExt for Commands<'w, 's> {
     fn send_event(&mut self, event: impl Bundle) -> EntityCommands {
-        self.spawn((Event, event))
-    }
-}
-
-#[derive(Reflect, Debug, Clone, Copy)]
-pub struct Event;
-
-impl Component for Event {
-    const STORAGE_TYPE: bevy_ecs::component::StorageType = StorageType::Table;
-
-    fn register_component_hooks(hooks: &mut bevy_ecs::component::ComponentHooks) {
-        hooks.on_add(|mut world, event, _| {
-            // if world.resource::<EventEntities>().contains(event) {
-            //     return;
-            // }
-            assert!(!world.resource::<EventEntities>().contains(event));
-            world.commands().add(move |world: &mut World| {
-                world.resource_mut::<EventEntities>().push(event);
-            });
+        let entity = self.spawn_empty().id();
+        self.add(move |world: &mut World| {
+            world.resource_mut::<EventEntities>().push(entity);
+            world.entity_mut(entity).insert((Event, event));
         });
+        self.entity(entity)
     }
 }
+
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+pub struct Event;
 
 #[derive(Reflect, Debug, Default, Clone)]
 pub struct EventSequence {
