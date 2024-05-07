@@ -6,12 +6,12 @@ use std::{
 
 use bevy_app::prelude::*;
 use bevy_ecs::{
-    component::TableStorage,
     prelude::*,
     query::{QueryFilter, ReadOnlyQueryData},
     schedule::ScheduleLabel,
     system::{EntityCommands, SystemParam},
 };
+use bevy_reflect::Reflect;
 use bevy_utils::intern::Interned;
 
 pub mod event_listener;
@@ -33,7 +33,7 @@ impl<'w, 's> SendEventExt for Commands<'w, 's> {
         let entity = self.spawn_empty().id();
         self.add(move |world: &mut World| {
             world.resource_mut::<Events>().send(entity);
-            world.entity_mut(entity).insert(event);
+            world.entity_mut(entity).insert((Event, event));
         });
         self.entity(entity)
     }
@@ -59,7 +59,6 @@ impl EventPlugin {
 impl Plugin for EventPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Events>();
-
         app.add_systems(self.0.clone(), update_events.in_set(EventSystems));
     }
 }
@@ -76,15 +75,10 @@ fn update_events(world: &mut World) {
     });
 }
 
-struct Event;
+#[derive(Component, Reflect, Debug, Clone, Copy)]
+pub struct Event;
 
-impl Component for Event {
-    type Storage = TableStorage;
-
-    // TODO: add an `on_add` thingy for `Event` to add it to the `Events` resource automatically once 0.14 drops.
-}
-
-#[derive(Debug, Default)]
+#[derive(Reflect, Debug, Default, Clone)]
 pub struct EventSequence {
     events: Vec<Entity>,
     start_event_count: usize,
@@ -104,7 +98,7 @@ impl DerefMut for EventSequence {
     }
 }
 
-#[derive(Resource, Debug, Default)]
+#[derive(Resource, Reflect, Debug, Default, Clone)]
 pub struct Events {
     events_a: EventSequence,
     events_b: EventSequence,

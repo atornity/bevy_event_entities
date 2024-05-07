@@ -1,4 +1,4 @@
-# Events as entities blabla
+# BEE 🐝
 
 `bevy_events_as_entities` is a simple alternative to the built in event system in bevy, each event is an entity which can have one or more components which make up an event.
 

@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use bevy_app::{Plugin, PostUpdate};
 use bevy_ecs::{
     bundle::Bundle,
-    component::{Component, TableStorage},
+    component::Component,
     entity::Entity,
     query::{QueryData, QueryFilter, QueryItem, ROQueryItem, With},
     schedule::{IntoSystemConfigs, SystemSet},
@@ -52,21 +52,15 @@ impl<T: Component> Default for EventListenerPlugin<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Component, Reflect, Debug, PartialEq, Clone)]
 /// Add this to an event to make it listenable.
 pub struct Target(pub Entity);
 
-impl Component for Target {
-    type Storage = TableStorage;
-
-    // TODO: when 0.14 lands, automatically run callbacks in on_add
-}
-
 /// Useful for things like attacks etc.
-#[derive(Debug, Component)]
+#[derive(Component, Reflect, Debug, PartialEq, Clone)]
 pub struct Instigator(pub Entity);
 
-#[derive(Debug, Resource)]
+#[derive(Resource, Debug, PartialEq, Clone)]
 pub struct ListenerInput {
     // TODO: event data
     pub event: Entity,
@@ -156,10 +150,19 @@ impl<T: Component> On<T> {
     }
 }
 
-#[derive(Component, Debug, Reflect)]
+#[derive(Component, Reflect, Debug)]
 struct Propagated<T: Component> {
     event: Entity,
     marker: PhantomData<T>,
+}
+
+impl<T: Component> Clone for Propagated<T> {
+    fn clone(&self) -> Self {
+        Self {
+            event: self.event,
+            marker: PhantomData,
+        }
+    }
 }
 
 impl<T: Component> Propagated<T> {
