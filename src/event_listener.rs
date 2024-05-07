@@ -2,15 +2,14 @@ use std::marker::PhantomData;
 
 use bevy_app::Plugin;
 use bevy_ecs::{
-    bundle::Bundle,
-    component::{Component, ComponentId},
-    entity::Entity,
+    component::ComponentId,
+    prelude::*,
     query::{QueryData, QueryFilter, QueryItem, ROQueryItem},
-    schedule::SystemSet,
-    system::{BoxedSystem, EntityCommands, IntoSystem, Query, Res, Resource, SystemParam},
-    world::{DeferredWorld, World},
+    system::{BoxedSystem, EntityCommands, SystemParam},
+    world::DeferredWorld,
 };
 use bevy_hierarchy::Parent;
+use bevy_reflect::Reflect;
 
 use crate::SendEventExt;
 
@@ -84,15 +83,16 @@ impl<T: Component> Default for EventListenerPlugin<T> {
     }
 }
 
-#[derive(Component, Debug, Clone, PartialEq)]
+#[derive(Component, Reflect, Debug, PartialEq, Clone)]
 /// Add this to an event to make it listenable.
 pub struct Target(pub Entity);
 
 /// Useful for things like attacks etc.
-#[derive(Component, Debug, Clone, PartialEq)]
+
+#[derive(Resource, Debug, Clone, PartialEq, Component, Reflect)]
 pub struct Instigator(pub Entity);
 
-#[derive(Resource, Debug, Clone, PartialEq)]
+#[derive(Resource, Debug, PartialEq, Clone)]
 pub struct ListenerInput {
     // TODO: event data
     pub event: Entity,

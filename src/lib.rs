@@ -13,6 +13,7 @@ use bevy_ecs::{
     schedule::ScheduleLabel,
     system::{EntityCommands, SystemParam},
 };
+use bevy_reflect::Reflect;
 
 pub mod event_listener;
 
@@ -30,12 +31,6 @@ pub trait SendEventExt {
 
 impl<'w, 's> SendEventExt for Commands<'w, 's> {
     fn send_event(&mut self, event: impl Bundle) -> EntityCommands {
-        // let entity = self.spawn_empty().id();
-        // self.add(move |world: &mut World| {
-        //     world.resource_mut::<EventEntities>().push(entity);
-        //     world.entity_mut(entity).insert(event);
-        // });
-        // self.entity(entity)
         self.spawn((Event, event))
     }
 }
@@ -76,7 +71,7 @@ fn update_events(world: &mut World) {
     });
 }
 
-#[derive(Debug)]
+#[derive(Reflect, Debug, Clone, Copy)]
 pub struct Event;
 
 impl Component for Event {
@@ -92,7 +87,7 @@ impl Component for Event {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Reflect, Debug, Default, Clone)]
 pub struct EventSequence {
     events: Vec<Entity>,
     start_event_count: usize,
@@ -112,7 +107,7 @@ impl DerefMut for EventSequence {
     }
 }
 
-#[derive(Resource, Debug, Default)]
+#[derive(Resource, Reflect, Debug, Default, Clone)]
 pub struct EventEntities {
     events_a: EventSequence,
     events_b: EventSequence,
