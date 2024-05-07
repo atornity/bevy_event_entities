@@ -1,3 +1,4 @@
+//! Thank's so much to [aevyrie](https://github.com/aevyrie/bevy_eventlistener/blob/main/examples/minimal.rs), from whom I stole this example :3
 use bevy::prelude::*;
 use bevy_events_as_entities::{
     event_listener::{EventInput, EventListenerPlugin, On, SendEntityEventExt},
@@ -34,28 +35,34 @@ struct Armor;
 fn setup(mut commands: Commands) {
     commands
         .spawn((
-            Name::new("Player"),
             Player,
+            Name::new("Goblin"),
             Health(10),
-            On::<Attack>::run(damage_stuff),
+            On::<Attack>::run(block_or_take_damage),
         ))
         .with_children(|parent| {
             parent.spawn((
-                Name::new("Helmet"),
                 Armor,
+                Name::new("Helmet"),
                 Health(2),
-                On::<Attack>::run(damage_stuff),
+                On::<Attack>::run(block_or_take_damage),
             ));
             parent.spawn((
-                Name::new("Chest Plate"),
                 Armor,
+                Name::new("Shirt"),
                 Health(5),
-                On::<Attack>::run(damage_stuff),
+                On::<Attack>::run(block_or_take_damage),
+            ));
+            parent.spawn((
+                Armor,
+                Name::new("Socks"),
+                Health(2),
+                On::<Attack>::run(block_or_take_damage),
             ));
         });
 }
 
-fn damage_stuff(
+fn block_or_take_damage(
     mut commands: Commands,
     mut attack_input: EventInput<&mut Attack>,
     mut health: Query<(&mut Health, &Name)>,
