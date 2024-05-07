@@ -85,7 +85,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter> EventInput<'w, 's, D, F> {
         self.query.get_mut(self.input.event).unwrap()
     }
 
-    pub fn event(&self) -> Entity {
+    pub fn id(&self) -> Entity {
         self.input.event
     }
 
