@@ -4,7 +4,7 @@
 
 ## How is this different from the built in system?
 
-All events are stored in the same `Events` (not to be confused with `bevy::ecs::event::Event`) resource which means the ordering of events are predictable even if they are of different types.
+All events are stored in the same `EventEntities` resource which means the ordering of events are predictable even if they are of different types.
 
 Events are entities so you can add arbitrary component to events.
 

@@ -13,6 +13,7 @@ use bevy_ecs::{
     schedule::ScheduleLabel,
     system::{EntityCommands, SystemParam},
 };
+use bevy_hierarchy::DespawnRecursiveExt;
 use bevy_reflect::Reflect;
 
 pub mod event_listener;
@@ -22,17 +23,6 @@ pub mod prelude {
         event_listener::{EventInput, On, SendEntityEventExt},
         EntityEventReader, EventPlugin, QueryEventReader, SendEventExt,
     };
-}
-
-pub trait SendEventExt {
-    /// Spawn an entity and push it to the `Events` resource. Returns the `EntityCommands` of the spawned event.
-    fn send_event(&mut self, event: impl Bundle) -> EntityCommands;
-}
-
-impl<'w, 's> SendEventExt for Commands<'w, 's> {
-    fn send_event(&mut self, event: impl Bundle) -> EntityCommands {
-        self.spawn((Event, event))
-    }
 }
 
 #[derive(SystemSet, PartialEq, Eq, Hash, Clone, Debug)]
@@ -61,6 +51,7 @@ impl Plugin for EventPlugin {
 
 // TODO: events should only update once the fixed schedule has finished at least once since the last update.
 // If not then events may be missed if listened to from a system in fixed schedule.
+// (They may still be missed from systems with run conditions, like `on_timer`)
 fn update_events(world: &mut World) {
     world.resource_scope::<EventEntities, _>(|world, mut events| {
         for entity in events.update_drain() {
@@ -71,6 +62,17 @@ fn update_events(world: &mut World) {
     });
 }
 
+pub trait SendEventExt {
+    /// Spawn an entity and push it to the `Events` resource. Returns the `EntityCommands` of the spawned event.
+    fn send_event(&mut self, event: impl Bundle) -> EntityCommands;
+}
+
+impl<'w, 's> SendEventExt for Commands<'w, 's> {
+    fn send_event(&mut self, event: impl Bundle) -> EntityCommands {
+        self.spawn((Event, event))
+    }
+}
+
 #[derive(Reflect, Debug, Clone, Copy)]
 pub struct Event;
 
@@ -79,7 +81,10 @@ impl Component for Event {
 
     fn register_component_hooks(hooks: &mut bevy_ecs::component::ComponentHooks) {
         hooks.on_add(|mut world, event, _| {
-            debug_assert!(!world.resource::<EventEntities>().contains(event));
+            // if world.resource::<EventEntities>().contains(event) {
+            //     return;
+            // }
+            assert!(!world.resource::<EventEntities>().contains(event));
             world.commands().add(move |world: &mut World| {
                 world.resource_mut::<EventEntities>().push(event);
             });
