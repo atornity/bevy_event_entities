@@ -12,7 +12,7 @@ fn main() {
             PostUpdate,
             (block_attack, process_attack, defy_death, process_kill).chain(),
         )
-        .run()
+        .run();
 }
 
 #[derive(Component)]

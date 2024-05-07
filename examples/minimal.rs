@@ -7,7 +7,7 @@ fn main() {
         .add_plugins((DefaultPlugins, EventPlugin::default()))
         .add_systems(Update, snd)
         .add_systems(FixedUpdate, rcv)
-        .run()
+        .run();
 }
 
 #[derive(Component)]

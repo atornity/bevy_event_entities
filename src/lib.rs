@@ -6,13 +6,13 @@ use std::{
 
 use bevy_app::prelude::*;
 use bevy_ecs::{
-    component::TableStorage,
+    component::StorageType,
+    intern::Interned,
     prelude::*,
     query::{QueryFilter, ReadOnlyQueryData},
     schedule::ScheduleLabel,
     system::{EntityCommands, SystemParam},
 };
-use bevy_utils::intern::Interned;
 
 pub mod event_listener;
 
@@ -30,12 +30,13 @@ pub trait SendEventExt {
 
 impl<'w, 's> SendEventExt for Commands<'w, 's> {
     fn send_event(&mut self, event: impl Bundle) -> EntityCommands {
-        let entity = self.spawn_empty().id();
-        self.add(move |world: &mut World| {
-            world.resource_mut::<Events>().send(entity);
-            world.entity_mut(entity).insert(event);
-        });
-        self.entity(entity)
+        // let entity = self.spawn_empty().id();
+        // self.add(move |world: &mut World| {
+        //     world.resource_mut::<EventEntities>().push(entity);
+        //     world.entity_mut(entity).insert(event);
+        // });
+        // self.entity(entity)
+        self.spawn((Event, event))
     }
 }
 
@@ -58,8 +59,7 @@ impl EventPlugin {
 
 impl Plugin for EventPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Events>();
-
+        app.init_resource::<EventEntities>();
         app.add_systems(self.0.clone(), update_events.in_set(EventSystems));
     }
 }
@@ -67,7 +67,7 @@ impl Plugin for EventPlugin {
 // TODO: events should only update once the fixed schedule has finished at least once since the last update.
 // If not then events may be missed if listened to from a system in fixed schedule.
 fn update_events(world: &mut World) {
-    world.resource_scope::<Events, _>(|world, mut events| {
+    world.resource_scope::<EventEntities, _>(|world, mut events| {
         for entity in events.update_drain() {
             if let Some(entity) = world.get_entity_mut(entity) {
                 entity.despawn(); // TODO: should this be recursive?
@@ -76,12 +76,20 @@ fn update_events(world: &mut World) {
     });
 }
 
-struct Event;
+#[derive(Debug)]
+pub struct Event;
 
 impl Component for Event {
-    type Storage = TableStorage;
+    const STORAGE_TYPE: bevy_ecs::component::StorageType = StorageType::Table;
 
-    // TODO: add an `on_add` thingy for `Event` to add it to the `Events` resource automatically once 0.14 drops.
+    fn register_component_hooks(hooks: &mut bevy_ecs::component::ComponentHooks) {
+        hooks.on_add(|mut world, event, _| {
+            debug_assert!(!world.resource::<EventEntities>().contains(event));
+            world.commands().add(move |world: &mut World| {
+                world.resource_mut::<EventEntities>().push(event);
+            });
+        });
+    }
 }
 
 #[derive(Debug, Default)]
@@ -105,14 +113,18 @@ impl DerefMut for EventSequence {
 }
 
 #[derive(Resource, Debug, Default)]
-pub struct Events {
+pub struct EventEntities {
     events_a: EventSequence,
     events_b: EventSequence,
     event_count: usize,
 }
 
-impl Events {
-    pub fn send(&mut self, event: Entity) {
+impl EventEntities {
+    pub fn contains(&self, event: Entity) -> bool {
+        self.events_a.contains(&event) || self.events_b.contains(&event)
+    }
+
+    pub fn push(&mut self, event: Entity) {
         self.events_b.push(event);
         self.event_count += 1;
     }
@@ -172,7 +184,7 @@ impl Events {
     }
 }
 
-impl Extend<Entity> for Events {
+impl Extend<Entity> for EventEntities {
     fn extend<I>(&mut self, iter: I)
     where
         I: IntoIterator<Item = Entity>,
@@ -201,13 +213,13 @@ impl Default for ManualEventReader {
 }
 
 impl ManualEventReader {
-    pub fn read<'a>(&'a mut self, events: &'a Events) -> EntityEventIterator<'a> {
+    pub fn read<'a>(&'a mut self, events: &'a EventEntities) -> EntityEventIterator<'a> {
         EntityEventIterator::new(self, events)
     }
 
     pub fn read_with_query<'w, 's, 'a, D: ReadOnlyQueryData, F: QueryFilter>(
         &'a mut self,
-        events: &'a Events,
+        events: &'a EventEntities,
         query: &'a Query<'w, 's, D, F>,
     ) -> QueryEventIterator<'w, 's, 'a, D, F> {
         QueryEventIterator {
@@ -216,7 +228,7 @@ impl ManualEventReader {
         }
     }
 
-    pub fn len(&self, events: &Events) -> usize {
+    pub fn len(&self, events: &EventEntities) -> usize {
         events
             .event_count
             .saturating_sub(self.last_event_count)
@@ -231,7 +243,7 @@ where
     F: QueryFilter + 'static,
 {
     reader: Local<'s, ManualEventReader>,
-    events: Res<'w, Events>,
+    events: Res<'w, EventEntities>,
     query: Query<'w, 's, D, F>,
 }
 
@@ -248,7 +260,7 @@ where
 #[derive(SystemParam)]
 pub struct EntityEventReader<'w, 's> {
     reader: Local<'s, ManualEventReader>,
-    events: Res<'w, Events>,
+    events: Res<'w, EventEntities>,
 }
 
 impl<'w, 's> EntityEventReader<'w, 's> {
@@ -286,7 +298,7 @@ pub struct EntityEventIterator<'a> {
 }
 
 impl<'a> EntityEventIterator<'a> {
-    pub fn new(reader: &'a mut ManualEventReader, events: &'a Events) -> Self {
+    pub fn new(reader: &'a mut ManualEventReader, events: &'a EventEntities) -> Self {
         let a_index = reader
             .last_event_count
             .saturating_sub(events.events_a.start_event_count);

@@ -15,7 +15,7 @@ fn main() {
         ))
         .add_systems(Startup, setup)
         .add_systems(Update, damage_random_armor_or_player)
-        .run()
+        .run();
 }
 
 #[derive(Component)]
@@ -68,7 +68,7 @@ fn block_or_take_damage(
     mut health: Query<(&mut Health, &Name)>,
 ) {
     let (mut health, name) = health.get_mut(attack_input.target()).unwrap();
-
+    // dbg!(name);
     let damage = attack_input.get().damage;
     let new_health = health.0.saturating_sub(damage);
     let new_damage = damage.saturating_sub(health.0);

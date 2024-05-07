@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy_reflect = "0.13.2"
-bevy_app = "0.13.2"
-bevy_utils = "0.13.2"
-bevy_log = "0.13.2"
-bevy_ecs = "0.13.2"
-bevy_hierarchy = "0.13.2"
+bevy_reflect = { git = "https://github.com/bevyengine/bevy.git" }
+bevy_app = { git = "https://github.com/bevyengine/bevy.git" }
+bevy_utils = { git = "https://github.com/bevyengine/bevy.git" }
+bevy_log = { git = "https://github.com/bevyengine/bevy.git" }
+bevy_ecs = { git = "https://github.com/bevyengine/bevy.git" }
+bevy_hierarchy = { git = "https://github.com/bevyengine/bevy.git" }
 
 [dev-dependencies]
-bevy = "0.13.2"
+bevy = { git = "https://github.com/bevyengine/bevy.git" }
 rand = "0.8.5"

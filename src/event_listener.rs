@@ -1,21 +1,18 @@
 use std::marker::PhantomData;
 
-use bevy_app::{Plugin, PostUpdate};
+use bevy_app::Plugin;
 use bevy_ecs::{
     bundle::Bundle,
-    component::{Component, TableStorage},
+    component::{Component, ComponentId},
     entity::Entity,
-    query::{QueryData, QueryFilter, QueryItem, ROQueryItem, With},
-    schedule::{IntoSystemConfigs, SystemSet},
-    system::{
-        BoxedSystem, Commands, EntityCommands, IntoSystem, Query, Res, Resource, SystemParam,
-    },
-    world::World,
+    query::{QueryData, QueryFilter, QueryItem, ROQueryItem},
+    schedule::SystemSet,
+    system::{BoxedSystem, EntityCommands, IntoSystem, Query, Res, Resource, SystemParam},
+    world::{DeferredWorld, World},
 };
 use bevy_hierarchy::Parent;
-use bevy_reflect::Reflect;
 
-use crate::{QueryEventReader, SendEventExt};
+use crate::SendEventExt;
 
 pub trait SendEntityEventExt {
     /// Same as `Commands::send_event((Target(..), ..))` except this returns `&mut Self` instead of the `EntityCommands` of the spawned event.
@@ -37,13 +34,48 @@ pub struct EventListenerPlugin<T: Component>(PhantomData<T>);
 
 impl<T: Component> Plugin for EventListenerPlugin<T> {
     fn build(&self, app: &mut bevy_app::App) {
-        app.add_systems(
-            PostUpdate,
-            (propagate_events::<T>, run_callbacks::<T>)
-                .chain()
-                .in_set(EventListenerSystems),
-        );
+        let hooks = app.world_mut().register_component_hooks::<T>();
+        hooks.on_add(event_listener_hook::<T>);
     }
+}
+
+fn event_listener_hook<T: Component>(mut world: DeferredWorld, event: Entity, _: ComponentId) {
+    let Some(&Target(target)) = world.get::<Target>(event) else {
+        return;
+    };
+    world.commands().add(move |world: &mut World| {
+        let mut target = target;
+
+        loop {
+            if !world.entities().contains(event) {
+                return;
+            }
+
+            let Some(mut on) = world.entity_mut(target).take::<On<T>>() else {
+                continue;
+            };
+
+            world.insert_resource(ListenerInput { event, target });
+
+            let new_target = world.get::<Parent>(target).map(|parent| parent.get());
+
+            for callback in &mut on.callbacks {
+                callback.run_and_apply(world);
+            }
+
+            if let Some(mut entity) = world.get_entity_mut(target) {
+                entity.insert(on);
+            }
+
+            match new_target {
+                Some(new_target) => {
+                    target = new_target;
+                }
+                None => break,
+            }
+        }
+        world.remove_resource::<ListenerInput>();
+    });
 }
 
 impl<T: Component> Default for EventListenerPlugin<T> {
@@ -52,21 +84,15 @@ impl<T: Component> Default for EventListenerPlugin<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Component, Debug, Clone, PartialEq)]
 /// Add this to an event to make it listenable.
 pub struct Target(pub Entity);
 
-impl Component for Target {
-    type Storage = TableStorage;
-
-    // TODO: when 0.14 lands, automatically run callbacks in on_add
-}
-
 /// Useful for things like attacks etc.
-#[derive(Debug, Component)]
+#[derive(Component, Debug, Clone, PartialEq)]
 pub struct Instigator(pub Entity);
 
-#[derive(Debug, Resource)]
+#[derive(Resource, Debug, Clone, PartialEq)]
 pub struct ListenerInput {
     // TODO: event data
     pub event: Entity,
@@ -84,10 +110,12 @@ where
 }
 
 impl<'w, 's, D: QueryData, F: QueryFilter> EventInput<'w, 's, D, F> {
+    #[track_caller]
     pub fn get(&self) -> ROQueryItem<'_, D> {
         self.query.get(self.input.event).unwrap()
     }
 
+    #[track_caller]
     pub fn get_mut(&mut self) -> QueryItem<'_, D> {
         self.query.get_mut(self.input.event).unwrap()
     }
@@ -111,31 +139,23 @@ impl CallbackSystem {
         Self::Pending(Some(Box::new(IntoSystem::into_system(system))))
     }
 
-    fn run(&mut self, world: &mut World) {
+    fn run_and_apply(&mut self, world: &mut World) {
         match self {
             CallbackSystem::Pending(system) => {
                 let mut system = system.take().unwrap();
                 system.initialize(world);
                 system.run((), world);
+                system.apply_deferred(world);
                 *self = CallbackSystem::Ready(system);
             }
             CallbackSystem::Ready(system) => {
                 system.run((), world);
-            }
-        }
-    }
-
-    fn apply_deferred(&mut self, world: &mut World) {
-        match self {
-            CallbackSystem::Ready(system) => {
                 system.apply_deferred(world);
             }
-            CallbackSystem::Pending(_) => {}
         }
     }
 }
 
-// TODO: T: QueryData or T: Component ??? or T: SomeTupleTrait
 #[derive(Component)]
 pub struct On<T: Component> {
     callbacks: Vec<CallbackSystem>,
@@ -154,64 +174,4 @@ impl<T: Component> On<T> {
         self.callbacks.push(CallbackSystem::new(system));
         self
     }
-}
-
-#[derive(Component, Debug, Reflect)]
-struct Propagated<T: Component> {
-    event: Entity,
-    marker: PhantomData<T>,
-}
-
-impl<T: Component> Propagated<T> {
-    fn new(event: Entity) -> Self {
-        Self {
-            event,
-            marker: PhantomData,
-        }
-    }
-}
-
-fn propagate_events<T: Component>(
-    mut commands: Commands,
-    mut events: QueryEventReader<(Entity, &Target), With<T>>,
-    parents: Query<&Parent>,
-) {
-    for (event, &Target(mut target)) in events.read() {
-        while let Ok(parent) = parents.get(target) {
-            target = parent.get();
-            commands
-                .entity(target)
-                .send_event(Propagated::<T>::new(event));
-        }
-    }
-}
-
-fn run_callbacks<T: Component>(
-    mut commands: Commands,
-    mut events: QueryEventReader<(Entity, &Target, Option<&Propagated<T>>)>,
-    query: Query<(), With<On<T>>>,
-) {
-    for (entity, &Target(target), propagated) in events.read() {
-        let event = propagated.map(|p| p.event).unwrap_or(entity);
-
-        if query.contains(target) {
-            commands.add(move |world: &mut World| {
-                if world.get_entity(event).is_none() {
-                    return;
-                }
-                world.insert_resource(ListenerInput { event, target });
-                let mut on = world.entity_mut(target).take::<On<T>>().unwrap();
-                for callback in &mut on.callbacks {
-                    callback.run(world);
-                    callback.apply_deferred(world);
-                }
-                if let Some(mut entity) = world.get_entity_mut(target) {
-                    entity.insert(on);
-                }
-            });
-        }
-    }
-    commands.add(|world: &mut World| {
-        world.remove_resource::<ListenerInput>();
-    })
 }
