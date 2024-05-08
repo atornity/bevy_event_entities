@@ -1,6 +1,6 @@
 # BEE 🐝
 
-`bevy_events_as_entities` is a simple alternative to the built in event system in [bevy](https://www.bevyengine.org), each event is an entity which can have one or more components which together make up an event.
+`bevy_event_entities` is a simple alternative to the built in event system in [bevy](https://www.bevyengine.org), each event is an entity which can have one or more components which together make up an event.
 
 ## How is this different from the built in system?
 
@@ -8,7 +8,7 @@ All events are stored in the same `EventEntities` resource which means the order
 
 Events are just entities so you can add arbitrary components to events.
 
-`bevy_events_as_entities` is a lot slower which may be noticable when sending a bunch (thousands) of events every frame.
+`bevy_event_entities` is a lot slower which may be noticable when sending a bunch (thousands) of events every frame.
 
 ## Possibly outdated example
 
@@ -97,10 +97,3 @@ See also [minimal.rs](https://github.com/atornity/bevy_events_as_entities/blob/m
 ## Event listener
 
 This crate also offers an event listener implementation (think [bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) made to work with this crate).
-
-The only benefit of this over [bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) is that you can mix and match callbacks with regular event readers.
-For example, you can have `On` components which may mutate the damage of an `Attack` event.
-You can then have a system which reads this updated `Attack` damage and uses it to substract the `Health` of the target.
-This runs on all entities with a `Health` components regardless of whether or not they have a callback component (This is something I tried to do which motivated me to make this crate).
-
-[bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) is generally a lot more stable/complete in every way.
