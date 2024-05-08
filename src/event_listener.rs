@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use bevy_app::{Plugin, PostUpdate};
+use bevy_app::{Plugin, PostUpdate, PreUpdate};
 use bevy_ecs::{
     bundle::Bundle,
     component::Component,
@@ -17,19 +17,6 @@ use bevy_reflect::Reflect;
 
 use crate::{QueryEventReader, SendEventExt};
 
-pub trait SendEntityEventExt {
-    /// Same as `Commands::send_event((Target(..), ..))` except this returns `&mut Self` instead of the `EntityCommands` of the spawned event.
-    fn send_event(&mut self, event: impl Bundle) -> &mut Self;
-}
-
-impl<'a> SendEntityEventExt for EntityCommands<'a> {
-    fn send_event(&mut self, event: impl Bundle) -> &mut Self {
-        let target = self.id();
-        self.commands().send_event((Target(target), event));
-        self
-    }
-}
-
 #[derive(SystemSet, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct EventListenerSystems;
 
@@ -38,7 +25,7 @@ pub struct EventListenerPlugin<T: Component>(PhantomData<T>);
 impl<T: Component> Plugin for EventListenerPlugin<T> {
     fn build(&self, app: &mut bevy_app::App) {
         app.add_systems(
-            PostUpdate,
+            PreUpdate,
             (propagate_events::<T>, run_callbacks::<T>)
                 .chain()
                 .in_set(EventListenerSystems),
@@ -49,6 +36,64 @@ impl<T: Component> Plugin for EventListenerPlugin<T> {
 impl<T: Component> Default for EventListenerPlugin<T> {
     fn default() -> Self {
         Self(PhantomData)
+    }
+}
+
+fn propagate_events<T: Component>(
+    mut commands: Commands,
+    mut events: QueryEventReader<(Entity, &Target), With<T>>,
+    parents: Query<&Parent>,
+) {
+    for (event, &Target(mut target)) in events.read() {
+        while let Ok(parent) = parents.get(target) {
+            target = parent.get();
+            commands
+                .entity(target)
+                .send_event(Propagated::<T>::new(event));
+        }
+    }
+}
+
+fn run_callbacks<T: Component>(
+    mut commands: Commands,
+    mut events: QueryEventReader<(Entity, &Target, Option<&Propagated<T>>)>,
+    query: Query<(), With<On<T>>>,
+) {
+    for (entity, &Target(target), propagated) in events.read() {
+        let event = propagated.map(|p| p.event).unwrap_or(entity);
+
+        if query.contains(target) {
+            commands.add(move |world: &mut World| {
+                if world.get_entity(event).is_none() {
+                    return;
+                }
+                world.insert_resource(ListenerInput { event, target });
+                let mut on = world.entity_mut(target).take::<On<T>>().unwrap();
+                for callback in &mut on.callbacks {
+                    callback.run(world);
+                    callback.apply_deferred(world);
+                }
+                if let Some(mut entity) = world.get_entity_mut(target) {
+                    entity.insert(on);
+                }
+            });
+        }
+    }
+    commands.add(|world: &mut World| {
+        world.remove_resource::<ListenerInput>();
+    })
+}
+
+pub trait SendEntityEventExt {
+    /// Same as `Commands::send_event((Target(..), ..))` except this returns `&mut Self` instead of the `EntityCommands` of the spawned event.
+    fn send_event(&mut self, event: impl Bundle) -> &mut Self;
+}
+
+impl<'a> SendEntityEventExt for EntityCommands<'a> {
+    fn send_event(&mut self, event: impl Bundle) -> &mut Self {
+        let target = self.id();
+        self.commands().send_event((Target(target), event));
+        self
     }
 }
 
@@ -178,49 +223,4 @@ impl<T: Component> Propagated<T> {
             marker: PhantomData,
         }
     }
-}
-
-fn propagate_events<T: Component>(
-    mut commands: Commands,
-    mut events: QueryEventReader<(Entity, &Target), With<T>>,
-    parents: Query<&Parent>,
-) {
-    for (event, &Target(mut target)) in events.read() {
-        while let Ok(parent) = parents.get(target) {
-            target = parent.get();
-            commands
-                .entity(target)
-                .send_event(Propagated::<T>::new(event));
-        }
-    }
-}
-
-fn run_callbacks<T: Component>(
-    mut commands: Commands,
-    mut events: QueryEventReader<(Entity, &Target, Option<&Propagated<T>>)>,
-    query: Query<(), With<On<T>>>,
-) {
-    for (entity, &Target(target), propagated) in events.read() {
-        let event = propagated.map(|p| p.event).unwrap_or(entity);
-
-        if query.contains(target) {
-            commands.add(move |world: &mut World| {
-                if world.get_entity(event).is_none() {
-                    return;
-                }
-                world.insert_resource(ListenerInput { event, target });
-                let mut on = world.entity_mut(target).take::<On<T>>().unwrap();
-                for callback in &mut on.callbacks {
-                    callback.run(world);
-                    callback.apply_deferred(world);
-                }
-                if let Some(mut entity) = world.get_entity_mut(target) {
-                    entity.insert(on);
-                }
-            });
-        }
-    }
-    commands.add(|world: &mut World| {
-        world.remove_resource::<ListenerInput>();
-    })
 }
