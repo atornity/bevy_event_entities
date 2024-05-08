@@ -66,21 +66,35 @@ fn update_events(world: &mut World) {
 pub trait SendEventExt {
     /// Spawn an entity and push it to the `Events` resource. Returns the `EntityCommands` of the spawned event.
     fn send_event(&mut self, event: impl Bundle) -> EntityCommands;
+
+    fn send_event_batch<I>(&mut self, iter: I)
+    where
+        I: IntoIterator + Send + Sync + 'static,
+        I::Item: Bundle;
 }
 
 impl<'w, 's> SendEventExt for Commands<'w, 's> {
     fn send_event(&mut self, event: impl Bundle) -> EntityCommands {
         let entity = self.spawn_empty().id();
         self.add(move |world: &mut World| {
-            world.resource_mut::<EventEntities>().send(entity);
-            world.entity_mut(entity).insert((Event, event));
+            world.resource_mut::<EventEntities>().push(entity);
+            world.entity_mut(entity).insert(event);
         });
         self.entity(entity)
     }
-}
 
-#[derive(Component, Reflect, Debug, Clone, Copy)]
-pub struct Event;
+    fn send_event_batch<I>(&mut self, iter: I)
+    where
+        I: IntoIterator + Send + Sync + 'static,
+        I::Item: Bundle,
+    {
+        self.add(|world: &mut World| {
+            world.resource_scope::<EventEntities, _>(|world, mut events| {
+                events.extend(world.spawn_batch(iter));
+            });
+        });
+    }
+}
 
 #[derive(Reflect, Debug, Default, Clone)]
 pub struct EventSequence {
@@ -110,13 +124,9 @@ pub struct EventEntities {
 }
 
 impl EventEntities {
-    pub fn send(&mut self, event: Entity) {
+    pub fn push(&mut self, event: Entity) {
         self.events_b.push(event);
         self.event_count += 1;
-    }
-
-    pub fn send_batch(&mut self, events: impl IntoIterator<Item = Entity>) {
-        self.extend(events);
     }
 
     #[inline]

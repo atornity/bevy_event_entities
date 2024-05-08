@@ -8,6 +8,8 @@ All events are stored in the same `EventEntities` resource which means the order
 
 Events are just entities so you can add arbitrary components to events.
 
+`bevy_events_as_entities` is a lot slower which may be noticable when sending a bunch (thousands) of events every frame.
+
 ## Possibly outdated example
 
 ```rust
@@ -101,4 +103,4 @@ For example, you can have `On` components which may mutate the damage of an `Att
 You can then have a system which reads this updated `Attack` damage and uses it to substract the `Health` of the target.
 This runs on all entities with a `Health` components regardless of whether or not they have a callback component (This is something I tried to do which motivated me to make this crate).
 
-[bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) is generally a lot more feature complete in every other way.
+[bevy_eventlistener](https://github.com/aevyrie/bevy_eventlistener) is generally a lot more stable/complete in every way.
