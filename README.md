@@ -25,6 +25,11 @@ struct Attack {
     damage: u32,
 }
 
+fn setup(mut commands: Commands) {
+    commands.spawn(Player);
+    commands.spawn((Enemy, Health { value: 10 }));
+}
+
 fn attack_enemy(
     mut commands: Commands,
     player: Query<Entity, With<Player>>,
@@ -65,11 +70,6 @@ struct Player;
 
 #[derive(Component)]
 struct Enemy;
-
-fn setup(mut commands: Commands) {
-    commands.spawn(Player);
-    commands.spawn((Enemy, Health { value: 10 }));
-}
 ```
 
 See also [minimal.rs](https://github.com/atornity/bevy_events_as_entities/blob/master/examples/minimal.rs), [damage.rs](https://github.com/atornity/bevy_events_as_entities/blob/master/examples/damage.rs) and [listener.rs](https://github.com/atornity/bevy_events_as_entities/blob/master/examples/listener.rs).
