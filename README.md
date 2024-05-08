@@ -1,6 +1,6 @@
 # BEE 🐝
 
-`bevy_event_entities` is a simple alternative to the built in event system in [bevy](https://www.bevyengine.org), each event is an entity which can have one or more components which together make up an event.
+`bevy_event_entities` is a simple alternative to the built in event system in [bevy](https://www.bevyengine.org) (not a replacement), each event is an entity which can have one or more components which together make up an event.
 
 ## How is this different from the built in system?
 
