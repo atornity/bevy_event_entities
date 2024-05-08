@@ -15,55 +15,72 @@ fn main() {
     App::new()
         // Just add the plugin, no need to add every possible event.
         .add_plugins(EventPlugin::default())
-        .add_systems(Update, (attack_enemy, deal_damage).chain())
+        .add_systems(Update, (attack_enemy, deal_damage, kill_stuff).chain())
         .run();
 }
 
-// We derive `Component` instead of `Event` since events are just entities with components.
 #[derive(Component)]
-struct Attack {
-    damage: u32,
-}
+struct Kill;
 
 fn setup(mut commands: Commands) {
-    commands.spawn(Player);
-    commands.spawn((Enemy, Health { value: 10 }));
+    commands.spawn((Player, Damage(20)));
+    commands.spawn((Enemy, Health(10)));
 }
 
 fn attack_enemy(
     mut commands: Commands,
-    player: Query<Entity, With<Player>>,
+    player: Query<(Entity, Damage), With<Player>>,
     enemy: Query<Entity, With<Enemy>>,
 ) {
+    let (player, &Damage(damage)) = player.single();
+    let enemy = enemy.single();
+
     // Use `Commands` to send events.
     commands.send_event((
-        Attack {
-            damage: 10,
-        },
+        Damage(damage),
         // One event can have multiple components.
-        Target(enemy.single()),
-        Instigator(player.single()),
+        Target(enemy),
+        Instigator(player),
     ));
 }
 
 fn deal_damage(
+    mut commands: Commands,
     // `QueryEventReader` only supports read only access to components.
     // If for whatever reason you need to mutate the components of an event,
     // use `EntityEventReader` + `Query` instead.
-    mut events: QueryEventReader<(&Attack, &Target, &Instigator)>,
+    mut events: QueryEventReader<(&Damage, &Target, &Instigator)>,
     mut query: Query<&mut Health>,
 ) {
-    for (&Attack { damage }, &Target(target), &Instigator(instigator)) in events.read() {
+    for (&Damage(damage), &Target(target), &Instigator(instigator)) in events.read() {
         info!("{instigator:?} attacked {target:?} with {damage} damage!");
         let mut health = query.get_mut(target).unwrap();
-        health.value = health.value.saturating_sub(damage);
+        health.0 = health.0.saturating_sub(damage);
+        if health.0 == 0 {
+            commands.send_event((
+                Kill,
+                Target(target),
+                Instigator(instigator),
+            ));
+        }
+    }
+}
+
+fn kill_stuff(
+    mut commands: Commands,
+    mut events: QueryEventReader<(&Target, &Instigator), With<Kill>>,
+) {
+    for (&Target(target), &Instigator(instigator)) in events.read() {
+        info!("{instigator:?} killed {target:?}!");
+        commands.entity(target).despawn();
     }
 }
 
 #[derive(Component)]
-struct Health {
-    value: u32
-}
+struct Health(u32)
+
+#[derive(Component)]
+struct Damage(u32);
 
 #[derive(Component)]
 struct Player;
