@@ -45,10 +45,10 @@ fn deal_damage(
     // `QueryEventReader` only supports read only access to components.
     // If for whatever reason you need to mutate the components of an event,
     // use `EntityEventReader` + `Query` instead.
-    mut reader: QueryEventReader<(&Attack, &Target, &Instigator)>,
+    mut events: QueryEventReader<(&Attack, &Target, &Instigator)>,
     mut query: Query<&mut Health>,
 ) {
-    for (&Attack { damage }, &Target(target), &Instigator(instigator)) in reader.read() {
+    for (&Attack { damage }, &Target(target), &Instigator(instigator)) in events.read() {
         info!("{instigator:?} attacked {target:?} with {damage} damage!");
         let mut health = query.get_mut(target).unwrap();
         health.value = health.value.saturating_sub(damage);
