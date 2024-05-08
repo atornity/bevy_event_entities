@@ -19,9 +19,6 @@ fn main() {
         .run();
 }
 
-#[derive(Component)]
-struct Kill;
-
 fn setup(mut commands: Commands) {
     commands.spawn((Player, Damage(20)));
     commands.spawn((Enemy, Health(10)));
@@ -75,6 +72,10 @@ fn kill_stuff(
         commands.entity(target).despawn();
     }
 }
+
+// We derive `Component` instead of `Event` since events are just entities with components.
+#[derive(Component)]
+struct Kill;
 
 #[derive(Component)]
 struct Health(u32)
