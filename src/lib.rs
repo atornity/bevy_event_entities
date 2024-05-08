@@ -17,11 +17,14 @@ use bevy_utils::intern::Interned;
 #[cfg(test)]
 mod tests;
 
+pub mod capture_event;
 pub mod event_listener;
 
 pub mod prelude {
     pub use crate::{
-        event_listener::{EventInput, On, SendEntityEventExt},
+        event_listener::{
+            EventInput, EventListenerPlugin, Instigator, On, SendEntityEventExt, Target,
+        },
         EntityEventReader, EventPlugin, QueryEventReader, SendEventExt,
     };
 }
@@ -30,6 +33,13 @@ pub mod prelude {
 pub struct EventSystems;
 
 pub struct EventPlugin(Interned<dyn ScheduleLabel>);
+
+impl Plugin for EventPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<EventEntities>();
+        app.add_systems(self.0.clone(), update_events.in_set(EventSystems));
+    }
+}
 
 impl Default for EventPlugin {
     fn default() -> Self {
@@ -40,13 +50,6 @@ impl Default for EventPlugin {
 impl EventPlugin {
     pub fn new(schedule: impl ScheduleLabel) -> Self {
         Self(schedule.intern())
-    }
-}
-
-impl Plugin for EventPlugin {
-    fn build(&self, app: &mut App) {
-        app.init_resource::<EventEntities>();
-        app.add_systems(self.0.clone(), update_events.in_set(EventSystems));
     }
 }
 

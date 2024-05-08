@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy_events_as_entities::{event_listener::Target, prelude::*};
+use bevy_event_entities::{event_listener::Target, prelude::*};
 
 fn main() {
     App::new()

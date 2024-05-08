@@ -1,12 +1,12 @@
 use std::marker::PhantomData;
 
-use bevy_app::{Plugin, PostUpdate, PreUpdate};
+use bevy_app::{Plugin, PreUpdate};
 use bevy_ecs::{
     bundle::Bundle,
     component::Component,
     entity::Entity,
     query::{QueryData, QueryFilter, QueryItem, ROQueryItem, With},
-    schedule::{IntoSystemConfigs, SystemSet},
+    schedule::{IntoSystemConfigs, ScheduleLabel, SystemSet},
     system::{
         BoxedSystem, Commands, EntityCommands, IntoSystem, Query, Res, Resource, SystemParam,
     },
@@ -14,18 +14,22 @@ use bevy_ecs::{
 };
 use bevy_hierarchy::Parent;
 use bevy_reflect::Reflect;
+use bevy_utils::intern::Interned;
 
 use crate::{QueryEventReader, SendEventExt};
 
 #[derive(SystemSet, PartialEq, Eq, Hash, Debug, Clone)]
 pub struct EventListenerSystems;
 
-pub struct EventListenerPlugin<T: Component>(PhantomData<T>);
+pub struct EventListenerPlugin<T: Component> {
+    schedule: Interned<dyn ScheduleLabel>,
+    marker: PhantomData<T>,
+}
 
 impl<T: Component> Plugin for EventListenerPlugin<T> {
     fn build(&self, app: &mut bevy_app::App) {
         app.add_systems(
-            PreUpdate,
+            self.schedule.clone(),
             (propagate_events::<T>, run_callbacks::<T>)
                 .chain()
                 .in_set(EventListenerSystems),
@@ -35,7 +39,19 @@ impl<T: Component> Plugin for EventListenerPlugin<T> {
 
 impl<T: Component> Default for EventListenerPlugin<T> {
     fn default() -> Self {
-        Self(PhantomData)
+        Self {
+            schedule: PreUpdate.intern(),
+            marker: PhantomData,
+        }
+    }
+}
+
+impl<T: Component> EventListenerPlugin<T> {
+    pub fn new(schedule: impl ScheduleLabel) -> Self {
+        Self {
+            schedule: schedule.intern(),
+            marker: PhantomData,
+        }
     }
 }
 
@@ -85,7 +101,6 @@ fn run_callbacks<T: Component>(
 }
 
 pub trait SendEntityEventExt {
-    /// Same as `Commands::send_event((Target(..), ..))` except this returns `&mut Self` instead of the `EntityCommands` of the spawned event.
     fn send_event(&mut self, event: impl Bundle) -> &mut Self;
 }
 

@@ -512,7 +512,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_events_as_entities"
+name = "bevy_event_entities"
 version = "0.1.0"
 dependencies = [
  "bevy",

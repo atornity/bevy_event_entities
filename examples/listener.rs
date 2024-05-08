@@ -1,6 +1,6 @@
 //! Thank's so much to [aevyrie](https://github.com/aevyrie/bevy_eventlistener/blob/main/examples/minimal.rs), from whom I stole this example :3
 use bevy::prelude::*;
-use bevy_events_as_entities::{
+use bevy_event_entities::{
     event_listener::{EventInput, EventListenerPlugin, On, SendEntityEventExt},
     prelude::*,
 };

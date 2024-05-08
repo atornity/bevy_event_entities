@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use bevy_events_as_entities::prelude::*;
+use bevy_event_entities::prelude::*;
 
 fn main() {
     App::new()
