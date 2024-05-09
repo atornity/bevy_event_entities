@@ -1,18 +1,22 @@
-use std::marker::PhantomData;
+use std::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 use bevy_app::{Plugin, PreUpdate};
 use bevy_ecs::{
     bundle::Bundle,
     component::Component,
     entity::Entity,
-    query::{QueryData, QueryFilter, QueryItem, ROQueryItem, With},
-    schedule::{IntoSystemConfigs, ScheduleLabel, SystemSet},
+    query::{Or, QueryData, QueryFilter, QueryItem, ROQueryItem, With},
+    schedule::{IntoSystemConfigs, ScheduleLabel, SystemConfigs, SystemSet},
     system::{
         BoxedSystem, Commands, EntityCommands, IntoSystem, Query, Res, Resource, SystemParam,
     },
     world::World,
 };
 use bevy_hierarchy::Parent;
+use bevy_log::warn;
 use bevy_reflect::Reflect;
 use bevy_utils::intern::Interned;
 
@@ -26,14 +30,17 @@ pub struct EventListenerPlugin<T: Component> {
     marker: PhantomData<T>,
 }
 
+pub fn event_listener_systems<T: Component>() -> SystemConfigs {
+    IntoSystemConfigs::into_configs(
+        (propagate_events::<T>, run_callbacks::<T>)
+            .in_set(EventListenerSystems)
+            .chain(),
+    )
+}
+
 impl<T: Component> Plugin for EventListenerPlugin<T> {
     fn build(&self, app: &mut bevy_app::App) {
-        app.add_systems(
-            self.schedule.clone(),
-            (propagate_events::<T>, run_callbacks::<T>)
-                .chain()
-                .in_set(EventListenerSystems),
-        );
+        app.add_systems(self.schedule.clone(), event_listener_systems::<T>());
     }
 }
 
@@ -55,7 +62,7 @@ impl<T: Component> EventListenerPlugin<T> {
     }
 }
 
-fn propagate_events<T: Component>(
+pub fn propagate_events<T: Component>(
     mut commands: Commands,
     mut events: QueryEventReader<(Entity, &Target), With<T>>,
     parents: Query<&Parent>,
@@ -70,17 +77,26 @@ fn propagate_events<T: Component>(
     }
 }
 
-fn run_callbacks<T: Component>(
+pub fn run_callbacks<T: Component>(
     mut commands: Commands,
-    mut events: QueryEventReader<(Entity, &Target, Option<&Propagated<T>>)>,
-    query: Query<(), With<On<T>>>,
+    mut events: QueryEventReader<
+        (Entity, &Target, Option<&Propagated<T>>),
+        Or<(With<T>, With<Propagated<T>>)>,
+    >,
+    callbacks: Query<(), With<On<T>>>,
 ) {
     for (entity, &Target(target), propagated) in events.read() {
         let event = propagated.map(|p| p.event).unwrap_or(entity);
 
-        if query.contains(target) {
+        if callbacks.contains(target) {
             commands.add(move |world: &mut World| {
-                if world.get_entity(event).is_none() {
+                let entities = world.entities();
+                if !entities.contains(event) {
+                    warn!("event {event:?} does not exist");
+                    return;
+                }
+                if !entities.contains(target) {
+                    warn!("target {target:?} does not exist");
                     return;
                 }
                 world.insert_resource(ListenerInput { event, target });
@@ -120,6 +136,40 @@ pub struct Target(pub Entity);
 #[derive(Component, Reflect, Debug, PartialEq, Clone)]
 pub struct Instigator(pub Entity);
 
+pub struct EventInputRef<'w, D: QueryData> {
+    pub item: ROQueryItem<'w, D>,
+    pub event: Entity,
+    pub target: Entity,
+}
+
+impl<'w, D: QueryData> Deref for EventInputRef<'w, D> {
+    type Target = ROQueryItem<'w, D>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.item
+    }
+}
+
+pub struct EventInputMut<'w, D: QueryData> {
+    pub item: QueryItem<'w, D>,
+    pub event: Entity,
+    pub target: Entity,
+}
+
+impl<'w, D: QueryData> Deref for EventInputMut<'w, D> {
+    type Target = QueryItem<'w, D>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.item
+    }
+}
+
+impl<'w, D: QueryData> DerefMut for EventInputMut<'w, D> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.item
+    }
+}
+
 #[derive(Resource, Debug, PartialEq, Clone)]
 pub struct ListenerInput {
     pub event: Entity,
@@ -137,12 +187,24 @@ where
 }
 
 impl<'w, 's, D: QueryData, F: QueryFilter> EventInput<'w, 's, D, F> {
-    pub fn get(&self) -> ROQueryItem<'_, D> {
-        self.query.get(self.input.event).unwrap()
+    pub fn get(&self) -> Result<EventInputRef<D>, bevy_ecs::query::QueryEntityError> {
+        self.query.get(self.input.event).map(|item| EventInputRef {
+            item,
+            event: self.id(),
+            target: self.target(),
+        })
     }
 
-    pub fn get_mut(&mut self) -> QueryItem<'_, D> {
-        self.query.get_mut(self.input.event).unwrap()
+    pub fn get_mut(&mut self) -> Result<EventInputMut<D>, bevy_ecs::query::QueryEntityError> {
+        let event = self.id();
+        let target = self.target();
+        self.query
+            .get_mut(self.input.event)
+            .map(|item| EventInputMut {
+                item,
+                event,
+                target,
+            })
     }
 
     pub fn id(&self) -> Entity {
@@ -217,7 +279,7 @@ impl<T: Component> On<T> {
 }
 
 #[derive(Component, Reflect, Debug)]
-struct Propagated<T: Component> {
+pub struct Propagated<T: Component> {
     event: Entity,
     marker: PhantomData<T>,
 }

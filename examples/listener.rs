@@ -64,12 +64,13 @@ fn setup(mut commands: Commands) {
 
 fn block_or_take_damage(
     mut commands: Commands,
-    mut attack_input: EventInput<&mut Attack>,
+    mut input: EventInput<&mut Attack>,
     mut health: Query<(&mut Health, &Name)>,
 ) {
-    let (mut health, name) = health.get_mut(attack_input.target()).unwrap();
+    let (mut health, name) = health.get_mut(input.target()).unwrap();
+    let mut input = input.get_mut().unwrap();
 
-    let damage = attack_input.get().damage;
+    let damage = input.damage;
     let new_health = health.0.saturating_sub(damage);
     let new_damage = damage.saturating_sub(health.0);
     info!(
@@ -80,14 +81,14 @@ fn block_or_take_damage(
     match new_health == 0 {
         true => {
             info!("killed {name}");
-            commands.entity(attack_input.target()).despawn()
+            commands.entity(input.target).despawn()
         }
         false => health.0 = new_health,
     }
 
     match new_damage == 0 {
-        true => commands.entity(attack_input.id()).despawn(),
-        false => attack_input.get_mut().damage = new_damage,
+        true => commands.entity(input.event).despawn(),
+        false => input.damage = new_damage,
     }
 }
 
