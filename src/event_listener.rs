@@ -156,10 +156,6 @@ impl<'a> SendEntityEventExt for EntityCommands<'a> {
 /// Add this to an event to make it listenable.
 pub struct Target(pub Entity);
 
-/// Useful for things like attacks etc.
-#[derive(Component, Reflect, Debug, PartialEq, Clone, Copy)]
-pub struct Instigator(pub Entity);
-
 pub struct EventInputRef<'w, D: QueryData> {
     pub item: ROQueryItem<'w, D>,
     pub event: Entity,

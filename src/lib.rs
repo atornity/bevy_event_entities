@@ -6,7 +6,6 @@ use std::{
 
 use bevy_app::prelude::*;
 use bevy_ecs::{
-    event::event_update_system,
     prelude::*,
     query::{QueryFilter, ReadOnlyQueryData},
     schedule::{ScheduleLabel, SystemConfigs},
@@ -20,12 +19,10 @@ mod tests;
 
 pub mod event_listener;
 
-mod damage;
-
 pub mod prelude {
     pub use crate::{
         event_listener::{
-            EventInput, EventListenerPlugin, Instigator, Listenable, On, SendEntityEventExt, Target,
+            EventInput, EventListenerPlugin, Listenable, On, SendEntityEventExt, Target,
         },
         EntityEventReader, EventEntities, EventPlugin, QueryEventReader, SendEventExt,
     };
