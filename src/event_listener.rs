@@ -16,9 +16,12 @@ use bevy_hierarchy::{BuildWorldChildren, Parent};
 use bevy_reflect::Reflect;
 use bevy_utils::intern::Interned;
 
-use crate::{events_not_empty, QueryEventReader, SendEventExt};
+use crate::{any_events, QueryEventReader, SendEventExt};
 
+pub use bevy_event_entities_derive::Listenable;
 pub trait Listenable: Component + Sized {
+    const PROPAGATE: bool;
+
     fn entity_contains(entity: EntityRef) -> bool {
         entity.contains::<Self>()
     }
@@ -26,10 +29,14 @@ pub trait Listenable: Component + Sized {
 
 // TODO: find a better name for this
 pub trait ListanableTuple: Send + Sync + 'static {
+    const PROPAGATE: bool;
+
     fn entity_contains(entity: bevy_ecs::world::EntityRef) -> bool;
 }
 
 impl<T: Listenable> ListanableTuple for T {
+    const PROPAGATE: bool = T::PROPAGATE;
+
     fn entity_contains(entity: EntityRef) -> bool {
         T::entity_contains(entity)
     }
@@ -38,11 +45,15 @@ impl<T: Listenable> ListanableTuple for T {
 macro_rules! impl_event_ident_tuple {
     ($($T:ident),*) => {
         impl<$($T: ListanableTuple),*> ListanableTuple for ($($T,)*) {
+            const PROPAGATE: bool = $($T::PROPAGATE)||*;
+
             fn entity_contains(entity: EntityRef) -> bool {
                 $($T::entity_contains(entity))&&*
             }
         }
         impl<$($T: ListanableTuple),*> ListanableTuple for Or<($($T,)*)> {
+            const PROPAGATE: bool = $($T::PROPAGATE)||*;
+
             fn entity_contains(entity: EntityRef) -> bool {
                 $($T::entity_contains(entity))||*
             }
@@ -58,7 +69,7 @@ pub struct EventListenerSystems;
 pub fn event_listener_systems() -> SystemConfigs {
     IntoSystemConfigs::into_configs(
         (propagate_events, run_callbacks)
-            .run_if(events_not_empty)
+            .run_if(any_events)
             .in_set(EventListenerSystems)
             .chain(),
     )
@@ -70,7 +81,11 @@ pub struct EventListenerPlugin {
 
 impl Plugin for EventListenerPlugin {
     fn build(&self, app: &mut bevy_app::App) {
-        app.add_systems(self.schedule.clone(), event_listener_systems());
+        app.add_systems(EventListenerSchedule, event_listener_systems());
+        app.add_systems(
+            self.schedule.clone(),
+            EventListenerSchedule::run.in_set(EventListenerSystems),
+        );
     }
 }
 
@@ -87,6 +102,15 @@ impl EventListenerPlugin {
         Self {
             schedule: schedule.intern(),
         }
+    }
+}
+
+#[derive(ScheduleLabel, Debug, PartialEq, Eq, Hash, Clone)]
+pub struct EventListenerSchedule;
+
+impl EventListenerSchedule {
+    pub fn run(world: &mut World) {
+        world.run_schedule(EventListenerSchedule);
     }
 }
 
@@ -171,7 +195,7 @@ impl<'w, D: QueryData> Deref for EventInputRef<'w, D> {
 }
 
 pub struct EventInputMut<'w, D: QueryData> {
-    pub item: QueryItem<'w, D>,
+    item: QueryItem<'w, D>,
     pub event: Entity,
     pub target: Entity,
 }
@@ -196,7 +220,7 @@ pub struct ListenerInput {
     pub target: Entity,
 }
 
-#[derive(SystemParam)]
+#[derive(SystemParam, Debug)]
 pub struct EventInput<'w, 's, D = (), F = ()>
 where
     D: QueryData + 'static,
@@ -210,13 +234,13 @@ impl<'w, 's, D: QueryData, F: QueryFilter> EventInput<'w, 's, D, F> {
     pub fn get(&self) -> Result<EventInputRef<D>, bevy_ecs::query::QueryEntityError> {
         self.query.get(self.input.event).map(|item| EventInputRef {
             item,
-            event: self.id(),
+            event: self.event(),
             target: self.target(),
         })
     }
 
     pub fn get_mut(&mut self) -> Result<EventInputMut<D>, bevy_ecs::query::QueryEntityError> {
-        let event = self.id();
+        let event = self.event();
         let target = self.target();
         self.query
             .get_mut(self.input.event)
@@ -227,7 +251,7 @@ impl<'w, 's, D: QueryData, F: QueryFilter> EventInput<'w, 's, D, F> {
             })
     }
 
-    pub fn id(&self) -> Entity {
+    pub fn event(&self) -> Entity {
         self.input.event
     }
 

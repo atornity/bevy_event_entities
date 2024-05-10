@@ -1,7 +1,11 @@
+[workspace]
+members = ["./bevy_event_entities_derive"]
+
 [package]
 name = "bevy_event_entities"
 version = "0.1.0"
 edition = "2021"
+
 
 [[bench]]
 name = "event_listener"
@@ -14,6 +18,7 @@ bevy_utils = "0.13.2"
 bevy_log = "0.13.2"
 bevy_ecs = "0.13.2"
 bevy_hierarchy = "0.13.2"
+bevy_event_entities_derive = { path = "./bevy_event_entities_derive" }
 
 [dev-dependencies]
 bevy = "0.13.2"

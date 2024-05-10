@@ -9,7 +9,7 @@ use bevy_ecs::{
     prelude::*,
     query::{QueryFilter, ReadOnlyQueryData},
     schedule::{ScheduleLabel, SystemConfigs},
-    system::{EntityCommands, SystemParam},
+    system::{EntityCommands, ExclusiveSystemParam, SystemParam},
 };
 use bevy_reflect::Reflect;
 use bevy_utils::intern::Interned;
@@ -38,10 +38,7 @@ pub struct EventPlugin {
 
 pub fn event_update_systems() -> SystemConfigs {
     IntoSystemConfigs::into_configs(
-        (
-            update_events.run_if(events_not_empty),
-            reset_event_update_signal,
-        )
+        (update_events.run_if(any_events), reset_event_update_signal)
             .chain()
             .in_set(EventSystems),
     )
@@ -85,9 +82,12 @@ pub fn reset_event_update_signal(mut signal: ResMut<EventUpdateSignal>) {
     signal.0 = false;
 }
 
-pub fn events_not_empty(events: Res<EventEntities>) -> bool {
-    // event_update_system(update_signal, events)
+pub fn any_events(events: Res<EventEntities>) -> bool {
     !events.events_a.is_empty() || !events.events_b.is_empty()
+}
+
+pub fn new_events(mut events: EntityEventReader) -> bool {
+    events.read().count() > 0
 }
 
 // TODO: events should only update once the fixed schedule has finished at least once since the last update.
@@ -179,9 +179,17 @@ pub struct EventEntities {
 }
 
 impl EventEntities {
+    /// Push an event to the `EventEntities` resource.
     pub fn push(&mut self, event: Entity) {
         self.events_b.push(event);
         self.event_count += 1;
+    }
+
+    /// Returns an iterator over the events in the `EventEntities` resource.
+    ///
+    /// This does not keep track of visited events. Use [`EventEntitiesReader`] for that.
+    pub fn iter(&self) -> impl Iterator<Item = &Entity> + '_ {
+        self.events_a.iter().chain(self.events_b.iter())
     }
 
     #[inline]
@@ -251,11 +259,11 @@ impl Extend<Entity> for EventEntities {
 }
 
 #[derive(Debug)]
-pub struct ManualEventReader {
+pub struct EventEntitiesReader {
     last_event_count: usize,
 }
 
-impl Default for ManualEventReader {
+impl Default for EventEntitiesReader {
     fn default() -> Self {
         Self {
             last_event_count: 0,
@@ -263,7 +271,7 @@ impl Default for ManualEventReader {
     }
 }
 
-impl ManualEventReader {
+impl EventEntitiesReader {
     pub fn read<'a>(&'a mut self, events: &'a EventEntities) -> EntityEventIterator<'a> {
         EntityEventIterator::new(self, events)
     }
@@ -293,7 +301,7 @@ where
     D: ReadOnlyQueryData + 'static,
     F: QueryFilter + 'static,
 {
-    reader: Local<'s, ManualEventReader>,
+    reader: Local<'s, EventEntitiesReader>,
     events: Res<'w, EventEntities>,
     query: Query<'w, 's, D, F>,
 }
@@ -310,7 +318,7 @@ where
 
 #[derive(SystemParam)]
 pub struct EntityEventReader<'w, 's> {
-    reader: Local<'s, ManualEventReader>,
+    reader: Local<'s, EventEntitiesReader>,
     events: Res<'w, EventEntities>,
 }
 
@@ -343,13 +351,13 @@ impl<'w, 's, 'a, D: ReadOnlyQueryData, F: QueryFilter> Iterator
 
 #[derive(Debug)]
 pub struct EntityEventIterator<'a> {
-    reader: &'a mut ManualEventReader,
+    reader: &'a mut EventEntitiesReader,
     chain: Chain<Iter<'a, Entity>, Iter<'a, Entity>>,
     unread: usize,
 }
 
 impl<'a> EntityEventIterator<'a> {
-    pub fn new(reader: &'a mut ManualEventReader, events: &'a EventEntities) -> Self {
+    pub fn new(reader: &'a mut EventEntitiesReader, events: &'a EventEntities) -> Self {
         let a_index = reader
             .last_event_count
             .saturating_sub(events.events_a.start_event_count);
