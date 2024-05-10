@@ -6,9 +6,10 @@ use std::{
 
 use bevy_app::prelude::*;
 use bevy_ecs::{
+    event::event_update_system,
     prelude::*,
     query::{QueryFilter, ReadOnlyQueryData},
-    schedule::ScheduleLabel,
+    schedule::{ScheduleLabel, SystemConfigs},
     system::{EntityCommands, SystemParam},
 };
 use bevy_reflect::Reflect;
@@ -17,46 +18,88 @@ use bevy_utils::intern::Interned;
 #[cfg(test)]
 mod tests;
 
-pub mod capture_event;
 pub mod event_listener;
+
+mod damage;
 
 pub mod prelude {
     pub use crate::{
         event_listener::{
-            EventInput, EventListenerPlugin, Instigator, On, SendEntityEventExt, Target,
+            EventInput, EventListenerPlugin, Instigator, Listenable, On, SendEntityEventExt, Target,
         },
-        EntityEventReader, EventPlugin, QueryEventReader, SendEventExt,
+        EntityEventReader, EventEntities, EventPlugin, QueryEventReader, SendEventExt,
     };
 }
 
 #[derive(SystemSet, PartialEq, Eq, Hash, Clone, Debug)]
 pub struct EventSystems;
 
-pub struct EventPlugin(Interned<dyn ScheduleLabel>);
+pub struct EventPlugin {
+    update: Interned<dyn ScheduleLabel>,
+    signal: Interned<dyn ScheduleLabel>,
+}
+
+pub fn event_update_systems() -> SystemConfigs {
+    IntoSystemConfigs::into_configs(
+        (
+            update_events.run_if(events_not_empty),
+            reset_event_update_signal,
+        )
+            .chain()
+            .in_set(EventSystems),
+    )
+}
 
 impl Plugin for EventPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EventEntities>();
-        app.add_systems(self.0.clone(), update_events.in_set(EventSystems));
+        app.init_resource::<EventUpdateSignal>();
+        app.add_systems(self.update.clone(), event_update_systems());
+        app.add_systems(self.signal.clone(), signal_event_update);
     }
 }
 
 impl Default for EventPlugin {
     fn default() -> Self {
-        Self(PostUpdate.intern())
+        Self {
+            update: PostUpdate.intern(),
+            signal: FixedPostUpdate.intern(),
+        }
     }
 }
 
 impl EventPlugin {
-    pub fn new(schedule: impl ScheduleLabel) -> Self {
-        Self(schedule.intern())
+    pub fn new(update: impl ScheduleLabel, signal: impl ScheduleLabel) -> Self {
+        Self {
+            update: update.intern(),
+            signal: signal.intern(),
+        }
     }
+}
+
+#[derive(Resource, Default)]
+pub struct EventUpdateSignal(pub bool);
+
+pub fn signal_event_update(mut signal: ResMut<EventUpdateSignal>) {
+    signal.0 = true;
+}
+
+pub fn reset_event_update_signal(mut signal: ResMut<EventUpdateSignal>) {
+    signal.0 = false;
+}
+
+pub fn events_not_empty(events: Res<EventEntities>) -> bool {
+    // event_update_system(update_signal, events)
+    !events.events_a.is_empty() || !events.events_b.is_empty()
 }
 
 // TODO: events should only update once the fixed schedule has finished at least once since the last update.
 // If not then events may be missed if listened to from a system in fixed schedule.
 // (They may still be missed from systems with run conditions, like `on_timer`)
-fn update_events(world: &mut World) {
+pub fn update_events(world: &mut World) {
+    if !world.resource::<EventUpdateSignal>().0 {
+        return;
+    }
     world.resource_scope::<EventEntities, _>(|world, mut events| {
         for entity in events.update_drain() {
             if let Some(entity) = world.get_entity_mut(entity) {
@@ -66,9 +109,19 @@ fn update_events(world: &mut World) {
     });
 }
 
+pub fn send_event(world: &mut World, event: impl Bundle) -> EntityWorldMut {
+    let event = world.spawn(event).id();
+    world.resource_mut::<EventEntities>().push(event);
+    world.entity_mut(event)
+}
+
 pub trait SendEventExt {
+    type Output<'a>
+    where
+        Self: 'a;
+
     /// Spawn an entity and push it to the `Events` resource. Returns the `EntityCommands` of the spawned event.
-    fn send_event(&mut self, event: impl Bundle) -> EntityCommands;
+    fn send_event(&mut self, event: impl Bundle) -> Self::Output<'_>;
 
     fn send_event_batch<I>(&mut self, iter: I)
     where
@@ -77,6 +130,8 @@ pub trait SendEventExt {
 }
 
 impl<'w, 's> SendEventExt for Commands<'w, 's> {
+    type Output<'a> = EntityCommands<'a> where Self: 'a;
+
     fn send_event(&mut self, event: impl Bundle) -> EntityCommands {
         let entity = self.spawn_empty().id();
         self.add(move |world: &mut World| {

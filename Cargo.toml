@@ -3,6 +3,10 @@ name = "bevy_event_entities"
 version = "0.1.0"
 edition = "2021"
 
+[[bench]]
+name = "event_listener"
+harness = false
+
 [dependencies]
 bevy_reflect = "0.13.2"
 bevy_app = "0.13.2"
@@ -13,4 +17,5 @@ bevy_hierarchy = "0.13.2"
 
 [dev-dependencies]
 bevy = "0.13.2"
+divan = "0.1.14"
 rand = "0.8.5"

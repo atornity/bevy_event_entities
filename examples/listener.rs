@@ -1,7 +1,9 @@
 //! Thank's so much to [aevyrie](https://github.com/aevyrie/bevy_eventlistener/blob/main/examples/minimal.rs), from whom I stole this example :3
 use bevy::prelude::*;
 use bevy_event_entities::{
-    event_listener::{EventInput, EventListenerPlugin, On, SendEntityEventExt},
+    event_listener::{
+        AddCallbackExt, EventInput, EventListenerPlugin, Listenable, SendEntityEventExt,
+    },
     prelude::*,
 };
 use rand::{seq::IteratorRandom, thread_rng};
@@ -11,7 +13,7 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             EventPlugin::default(),
-            EventListenerPlugin::<Attack>::default(),
+            EventListenerPlugin::default(),
         ))
         .add_systems(Startup, setup)
         .add_systems(Update, damage_random_armor_or_player)
@@ -22,6 +24,8 @@ fn main() {
 struct Attack {
     damage: u32,
 }
+
+impl Listenable for Attack {}
 
 #[derive(Component)]
 struct Health(u32);
@@ -34,31 +38,19 @@ struct Armor;
 
 fn setup(mut commands: Commands) {
     commands
-        .spawn((
-            Player,
-            Name::new("Goblin"),
-            Health(10),
-            On::<Attack>::run(block_or_take_damage),
-        ))
+        .spawn((Player, Name::new("Goblin"), Health(10)))
+        .on::<Attack, _>(block_or_take_damage)
         .with_children(|parent| {
-            parent.spawn((
-                Armor,
-                Name::new("Helmet"),
-                Health(2),
-                On::<Attack>::run(block_or_take_damage),
-            ));
-            parent.spawn((
-                Armor,
-                Name::new("Shirt"),
-                Health(5),
-                On::<Attack>::run(block_or_take_damage),
-            ));
-            parent.spawn((
-                Armor,
-                Name::new("Socks"),
-                Health(2),
-                On::<Attack>::run(block_or_take_damage),
-            ));
+            parent
+                .spawn((Armor, Name::new("Helmet"), Health(2)))
+                .on::<Attack, _>(block_or_take_damage);
+
+            parent
+                .spawn((Armor, Name::new("Shirt"), Health(5)))
+                .on::<Attack, _>(block_or_take_damage);
+            parent
+                .spawn((Armor, Name::new("Socks"), Health(2)))
+                .on::<Attack, _>(block_or_take_damage);
         });
 }
 
