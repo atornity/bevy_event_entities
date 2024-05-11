@@ -420,15 +420,9 @@ pub trait AddCallbackExt {
     fn add_callback<T: Listenable, M>(&mut self, callback: impl IntoCallback<T, M>) -> &mut Self;
 }
 
-pub trait AddEntityCallbackExt: AddCallbackExt {
-    /// Run a system when the event matching `T` is triggered with this entity as the [`Target`].
-    ///
-    /// See also [`entity_callback`](`AddEntityCallbackExt::entity_callback`).
-    fn entity_callback<T: Listenable, M>(
-        &mut self,
-        callback: impl IntoCallback<T, M>,
-    ) -> &mut Self {
-        self.add_callback::<(Target, T), _>(callback.into_bundle().1);
+impl AddCallbackExt for World {
+    fn add_callback<T: Listenable, M>(&mut self, callback: impl IntoCallback<T, M>) -> &mut Self {
+        self.spawn(callback.into_bundle());
         self
     }
 }
@@ -436,13 +430,6 @@ pub trait AddEntityCallbackExt: AddCallbackExt {
 impl AddCallbackExt for App {
     fn add_callback<T: Listenable, M>(&mut self, callback: impl IntoCallback<T, M>) -> &mut Self {
         self.world.add_callback(callback);
-        self
-    }
-}
-
-impl AddCallbackExt for World {
-    fn add_callback<T: Listenable, M>(&mut self, callback: impl IntoCallback<T, M>) -> &mut Self {
-        self.spawn(callback.into_bundle());
         self
     }
 }
@@ -459,32 +446,31 @@ impl<'w, 's> AddCallbackExt for Commands<'w, 's> {
 impl<'w> AddCallbackExt for EntityWorldMut<'w> {
     /// Run a system when the event matching `T` is triggered.
     ///
-    /// This will always run the callback system regardless of whether or not this entity was the [`Target`] of the event.
-    ///
-    /// See also [`entity_callback`](`AddEntityCallbackExt::entity_callback`).
+    /// This will only run the callback system if this entity was the [`Target`] of the event.
     fn add_callback<T: Listenable, M>(&mut self, callback: impl IntoCallback<T, M>) -> &mut Self {
-        let callback = self.world_scope(|world| world.spawn(callback.into_bundle()).id());
+        let callback = self.world_scope(|world| {
+            world
+                .spawn((
+                    CallbackIdent::new::<(Target, T)>(),
+                    callback.into_bundle().1,
+                ))
+                .id()
+        });
         self.add_child(callback);
         self
     }
 }
 
-impl<'w> AddEntityCallbackExt for EntityWorldMut<'w> {}
-
 impl<'a> AddCallbackExt for EntityCommands<'a> {
     /// Run a system when the event matching `T` is triggered.
     ///
-    /// This will always run the callback system regardless of whether or not this entity was the [`Target`] of the event.
-    ///
-    /// See also [`entity_callback`](`AddEntityCallbackExt::entity_callback`).
+    /// This will only run the callback system if this entity was the [`Target`] of the event.
     fn add_callback<T: Listenable, M>(&mut self, callback: impl IntoCallback<T, M>) -> &mut Self {
         self.add(move |mut entity: EntityWorldMut| {
             entity.add_callback(callback);
         })
     }
 }
-
-impl<'a> AddEntityCallbackExt for EntityCommands<'a> {}
 
 #[test]
 // this tests if events are propagated up the tree and if it stops when the event is despawned
@@ -526,7 +512,7 @@ fn test_propagate_events() {
     for i in 0..10 {
         let entity = world
             .spawn_empty()
-            .entity_callback::<TestEvent, _>(callback)
+            .add_callback::<TestEvent, _>(callback)
             .id();
         if i > 0 {
             world.entity_mut(entity).add_child(entities[i - 1]);

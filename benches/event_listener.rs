@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_event_entities::{
     event_listener::{
-        event_listener_system_configs, AddEntityCallbackExt, Listenable, Listener, On, Target,
+        event_listener_system_configs, AddCallbackExt, Listenable, Listener, On, Target,
     },
     send_event, EventEntities,
 };
@@ -37,13 +37,13 @@ fn nested((switch, depth, n): (bool, usize, usize)) {
 
     let mut entity = world.spawn_empty();
     for _ in 0..n {
-        entity.entity_callback(On::<MyEvent>::run(callback));
+        entity.add_callback(On::<MyEvent>::run(callback));
     }
     let mut entity = entity.id();
     for _ in 0..depth {
         let mut child = world.spawn_empty();
         for _ in 0..n {
-            child.entity_callback(On::<MyEvent>::run(callback));
+            child.add_callback(On::<MyEvent>::run(callback));
         }
         let child = child.id();
         world.entity_mut(entity).add_child(child);

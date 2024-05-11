@@ -45,18 +45,18 @@ fn setup(mut commands: Commands) {
 
     commands
         .spawn((Player, Name::new("Goblin"), Health(10)))
-        .entity_callback::<Attack, _>(block_or_take_damage)
+        .add_callback::<Attack, _>(block_or_take_damage)
         .with_children(|parent| {
             parent
                 .spawn((Armor, Name::new("Helmet"), Health(2)))
-                .entity_callback::<Attack, _>(block_or_take_damage);
+                .add_callback::<Attack, _>(block_or_take_damage);
 
             parent
                 .spawn((Armor, Name::new("Shirt"), Health(5)))
-                .entity_callback::<Attack, _>(block_or_take_damage);
+                .add_callback::<Attack, _>(block_or_take_damage);
             parent
                 .spawn((Armor, Name::new("Socks"), Health(2)))
-                .entity_callback::<Attack, _>(block_or_take_damage);
+                .add_callback::<Attack, _>(block_or_take_damage);
         });
 }
 

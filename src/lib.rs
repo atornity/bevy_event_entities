@@ -22,8 +22,8 @@ pub mod event_listener;
 pub mod prelude {
     pub use crate::{
         event_listener::{
-            AddCallbackExt, AddEntityCallbackExt, EventListenerPlugin, Listenable, Listener, On,
-            SendEntityEventExt, Target,
+            AddCallbackExt, EventListenerPlugin, Listenable, Listener, On, SendEntityEventExt,
+            Target,
         },
         EntityEventReader, EventEntities, EventPlugin, QueryEventReader, SendEventExt,
     };
