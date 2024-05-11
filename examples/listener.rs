@@ -2,7 +2,7 @@
 use bevy::prelude::*;
 use bevy_event_entities::{
     event_listener::{
-        AddCallbackExt, EventInput, EventListenerPlugin, Listenable, SendEntityEventExt,
+        AddCallbackExt, EventListenerPlugin, Listenable, Listener, SendEntityEventExt,
     },
     prelude::*,
 };
@@ -20,12 +20,10 @@ fn main() {
         .run()
 }
 
-#[derive(Component)]
+#[derive(Component, Listenable)]
 struct Attack {
     damage: u32,
 }
-
-impl Listenable for Attack {}
 
 #[derive(Component)]
 struct Health(u32);
@@ -37,50 +35,57 @@ struct Player;
 struct Armor;
 
 fn setup(mut commands: Commands) {
+    // global callback why not
+    commands.add_callback::<Attack, _>(|input: Listener| {
+        if input.is_propagated() {
+            return;
+        }
+        warn!("whoa whoa whoa now, it seems a lot like someone was attacked over here");
+    });
+
     commands
         .spawn((Player, Name::new("Goblin"), Health(10)))
-        .on::<Attack, _>(block_or_take_damage)
+        .entity_callback::<Attack, _>(block_or_take_damage)
         .with_children(|parent| {
             parent
                 .spawn((Armor, Name::new("Helmet"), Health(2)))
-                .on::<Attack, _>(block_or_take_damage);
+                .entity_callback::<Attack, _>(block_or_take_damage);
 
             parent
                 .spawn((Armor, Name::new("Shirt"), Health(5)))
-                .on::<Attack, _>(block_or_take_damage);
+                .entity_callback::<Attack, _>(block_or_take_damage);
             parent
                 .spawn((Armor, Name::new("Socks"), Health(2)))
-                .on::<Attack, _>(block_or_take_damage);
+                .entity_callback::<Attack, _>(block_or_take_damage);
         });
 }
 
 fn block_or_take_damage(
     mut commands: Commands,
-    mut input: EventInput<&mut Attack>,
+    mut input: Listener<(Entity, &mut Attack, &Target)>,
     mut health: Query<(&mut Health, &Name)>,
 ) {
-    let (mut health, name) = health.get_mut(input.target()).unwrap();
-    let mut input = input.get_mut().unwrap();
+    let (event, mut attack, &Target(target)) = input.event_mut();
+    let (mut health, name) = health.get_mut(target).unwrap();
 
-    let damage = input.damage;
-    let new_health = health.0.saturating_sub(damage);
-    let new_damage = damage.saturating_sub(health.0);
+    let new_health = health.0.saturating_sub(attack.damage);
+    let new_damage = attack.damage.saturating_sub(health.0);
     info!(
-        "attacked {} with {} damage, health = {} - {} = {}",
-        name, damage, health.0, damage, new_health
+        "attacked {} with {} damage, health: {} -> {}",
+        name, attack.damage, health.0, new_health
     );
 
     match new_health == 0 {
         true => {
             info!("killed {name}");
-            commands.entity(input.target).despawn()
+            commands.entity(target).despawn_recursive()
         }
         false => health.0 = new_health,
     }
 
     match new_damage == 0 {
-        true => commands.entity(input.event).despawn(),
-        false => input.damage = new_damage,
+        true => commands.entity(event).despawn_recursive(),
+        false => attack.damage = new_damage,
     }
 }
 
@@ -90,7 +95,12 @@ fn damage_random_armor_or_player(
     player: Query<Entity, With<Player>>,
     key: Res<ButtonInput<KeyCode>>,
 ) {
+    if key.just_released(KeyCode::KeyR) {
+        commands.send_event(Attack { damage: 69 });
+    }
+
     if key.just_pressed(KeyCode::Space) {
+        error!("yeet");
         let mut rng = thread_rng();
         let target = armor
             .iter()

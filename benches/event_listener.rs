@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy_event_entities::{
-    event_listener::{event_listener_systems, AddCallbackExt, EventInput, Listenable, Target},
+    event_listener::{
+        event_listener_systems, AddEntityCallbackExt, Listenable, Listener, On, Target,
+    },
     send_event, EventEntities,
 };
 
@@ -8,12 +10,10 @@ fn main() {
     divan::main();
 }
 
-#[derive(Component)]
+#[derive(Component, Listenable)]
 struct MyEvent {
     num: usize,
 }
-
-impl Listenable for MyEvent {}
 
 fn setup() -> (World, Schedule) {
     let mut world = World::new();
@@ -29,21 +29,21 @@ fn setup() -> (World, Schedule) {
     (false, 1, 1_000), (true, 1, 1_000),
 ])]
 fn nested((switch, depth, n): (bool, usize, usize)) {
-    let callback = |input: EventInput<&MyEvent>| {
-        assert_eq!(69, input.get().unwrap().num);
+    let callback = |input: Listener<&MyEvent>| {
+        assert_eq!(69, input.event().num);
     };
 
     let (mut world, mut schedule) = setup();
 
     let mut entity = world.spawn_empty();
     for _ in 0..n {
-        entity.on::<MyEvent, _>(callback);
+        entity.entity_callback(On::<MyEvent>::run(callback));
     }
     let mut entity = entity.id();
     for _ in 0..depth {
         let mut child = world.spawn_empty();
         for _ in 0..n {
-            child.on::<MyEvent, _>(callback);
+            child.entity_callback(On::<MyEvent>::run(callback));
         }
         let child = child.id();
         world.entity_mut(entity).add_child(child);

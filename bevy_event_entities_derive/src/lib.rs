@@ -11,7 +11,9 @@ pub fn derive_listener(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         impl #impl_generics bevy_event_entities::event_listener::Listenable for #name #ty_generics #where_clause {
-            const PROPAGATE: bool = true;
+            fn entity_contains(entity: bevy_event_entities::event_listener::EntityRef) -> bool {
+                entity.contains::<Self>()
+            }
         }
     };
 

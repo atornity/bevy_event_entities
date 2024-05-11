@@ -9,7 +9,7 @@ use bevy_ecs::{
     prelude::*,
     query::{QueryFilter, ReadOnlyQueryData},
     schedule::{ScheduleLabel, SystemConfigs},
-    system::{EntityCommands, ExclusiveSystemParam, SystemParam},
+    system::{EntityCommands, SystemParam},
 };
 use bevy_reflect::Reflect;
 use bevy_utils::intern::Interned;
@@ -22,7 +22,8 @@ pub mod event_listener;
 pub mod prelude {
     pub use crate::{
         event_listener::{
-            EventInput, EventListenerPlugin, Listenable, On, SendEntityEventExt, Target,
+            AddCallbackExt, AddEntityCallbackExt, EventListenerPlugin, Listenable, Listener, On,
+            SendEntityEventExt, Target,
         },
         EntityEventReader, EventEntities, EventPlugin, QueryEventReader, SendEventExt,
     };
@@ -31,12 +32,7 @@ pub mod prelude {
 #[derive(SystemSet, PartialEq, Eq, Hash, Clone, Debug)]
 pub struct EventSystems;
 
-pub struct EventPlugin {
-    update: Interned<dyn ScheduleLabel>,
-    signal: Interned<dyn ScheduleLabel>,
-}
-
-pub fn event_update_systems() -> SystemConfigs {
+pub fn event_system_configs() -> SystemConfigs {
     IntoSystemConfigs::into_configs(
         (update_events.run_if(any_events), reset_event_update_signal)
             .chain()
@@ -44,29 +40,34 @@ pub fn event_update_systems() -> SystemConfigs {
     )
 }
 
+pub struct EventPlugin {
+    update_schedule: Interned<dyn ScheduleLabel>,
+    signal_schedule: Interned<dyn ScheduleLabel>,
+}
+
 impl Plugin for EventPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<EventEntities>();
         app.init_resource::<EventUpdateSignal>();
-        app.add_systems(self.update.clone(), event_update_systems());
-        app.add_systems(self.signal.clone(), signal_event_update);
+        app.add_systems(self.update_schedule.clone(), event_system_configs());
+        app.add_systems(self.signal_schedule.clone(), signal_event_update);
     }
 }
 
 impl Default for EventPlugin {
     fn default() -> Self {
         Self {
-            update: PostUpdate.intern(),
-            signal: FixedPostUpdate.intern(),
+            update_schedule: PostUpdate.intern(),
+            signal_schedule: FixedPostUpdate.intern(),
         }
     }
 }
 
 impl EventPlugin {
-    pub fn new(update: impl ScheduleLabel, signal: impl ScheduleLabel) -> Self {
+    pub fn new(update_schedule: impl ScheduleLabel, signal_schedule: impl ScheduleLabel) -> Self {
         Self {
-            update: update.intern(),
-            signal: signal.intern(),
+            update_schedule: update_schedule.intern(),
+            signal_schedule: signal_schedule.intern(),
         }
     }
 }
@@ -259,11 +260,11 @@ impl Extend<Entity> for EventEntities {
 }
 
 #[derive(Debug)]
-pub struct EventEntitiesReader {
+pub struct EventEntityReader {
     last_event_count: usize,
 }
 
-impl Default for EventEntitiesReader {
+impl Default for EventEntityReader {
     fn default() -> Self {
         Self {
             last_event_count: 0,
@@ -271,7 +272,7 @@ impl Default for EventEntitiesReader {
     }
 }
 
-impl EventEntitiesReader {
+impl EventEntityReader {
     pub fn read<'a>(&'a mut self, events: &'a EventEntities) -> EntityEventIterator<'a> {
         EntityEventIterator::new(self, events)
     }
@@ -301,7 +302,7 @@ where
     D: ReadOnlyQueryData + 'static,
     F: QueryFilter + 'static,
 {
-    reader: Local<'s, EventEntitiesReader>,
+    reader: Local<'s, EventEntityReader>,
     events: Res<'w, EventEntities>,
     query: Query<'w, 's, D, F>,
 }
@@ -318,7 +319,7 @@ where
 
 #[derive(SystemParam)]
 pub struct EntityEventReader<'w, 's> {
-    reader: Local<'s, EventEntitiesReader>,
+    reader: Local<'s, EventEntityReader>,
     events: Res<'w, EventEntities>,
 }
 
@@ -351,13 +352,13 @@ impl<'w, 's, 'a, D: ReadOnlyQueryData, F: QueryFilter> Iterator
 
 #[derive(Debug)]
 pub struct EntityEventIterator<'a> {
-    reader: &'a mut EventEntitiesReader,
+    reader: &'a mut EventEntityReader,
     chain: Chain<Iter<'a, Entity>, Iter<'a, Entity>>,
     unread: usize,
 }
 
 impl<'a> EntityEventIterator<'a> {
-    pub fn new(reader: &'a mut EventEntitiesReader, events: &'a EventEntities) -> Self {
+    pub fn new(reader: &'a mut EventEntityReader, events: &'a EventEntities) -> Self {
         let a_index = reader
             .last_event_count
             .saturating_sub(events.events_a.start_event_count);
