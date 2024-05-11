@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_event_entities::{
     event_listener::{
-        event_listener_systems, AddEntityCallbackExt, Listenable, Listener, On, Target,
+        event_listener_system_configs, AddEntityCallbackExt, Listenable, Listener, On, Target,
     },
     send_event, EventEntities,
 };
@@ -19,7 +19,7 @@ fn setup() -> (World, Schedule) {
     let mut world = World::new();
     world.init_resource::<EventEntities>();
     let mut schedule = Schedule::default();
-    schedule.add_systems(event_listener_systems());
+    schedule.add_systems(event_listener_system_configs());
     (world, schedule)
 }
 

@@ -58,7 +58,7 @@ impl Plugin for EventListenerPlugin {
         app.add_systems(EventListenerSchedule, event_listener_system_configs());
         app.add_systems(
             self.schedule.clone(),
-            EventListenerSchedule::run.in_set(EventListenerSystems),
+            run_event_listener_schedule.in_set(EventListenerSystems),
         );
     }
 }
@@ -82,10 +82,8 @@ impl EventListenerPlugin {
 #[derive(ScheduleLabel, Debug, PartialEq, Eq, Hash, Clone)]
 pub struct EventListenerSchedule;
 
-impl EventListenerSchedule {
-    pub fn run(world: &mut World) {
-        world.run_schedule(EventListenerSchedule);
-    }
+pub fn run_event_listener_schedule(world: &mut World) {
+    world.run_schedule(EventListenerSchedule);
 }
 
 #[derive(Component, Clone, PartialEq)]
@@ -107,7 +105,7 @@ pub fn propagate_events(
 
 pub fn run_callbacks(world: &mut World, mut reader: Local<EventEntityReader>) {
     world.resource_scope::<EventEntities, _>(|world: &mut World, events| {
-        world.insert_resource(ListenerInput { event_type: EventType::PLACEHOLDER, propagate: true });
+        world.insert_resource(ListenerInput { event_type: EventType::PLACEHOLDER });
         let mut queue = CommandQueue::default();
         for event in reader.read(&events) {
             let Some(target) = world.get_entity(event).map(|e| e.get::<Target>().map(|t| t.0)) else {
@@ -138,16 +136,9 @@ pub fn run_callbacks(world: &mut World, mut reader: Local<EventEntityReader>) {
                             return;
                         }
 
-                        // set the input for the callback and cancel if propagation is stopped
+                        // set the input for the callback
                         let mut input = world.resource_mut::<ListenerInput>();
-                        if !input.propagate {
-                            let EventType::Propagated { propagated, .. } = event else {
-                                panic!("expected propagated event")
-                            };
-                            world.entity_mut(propagated).despawn();
-                            trace!("event {:?} propagation stopped", event.id());
-                            return;
-                        }
+
                         input.event_type = event;
 
                         // take the callback from the entity temporarily to run it
@@ -263,7 +254,6 @@ impl EventType {
 #[derive(Resource, Debug, PartialEq, Clone)]
 pub struct ListenerInput {
     pub event_type: EventType,
-    pub propagate: bool,
 }
 
 #[derive(SystemParam, Debug)]
@@ -272,7 +262,7 @@ where
     D: QueryData + 'static,
     F: QueryFilter + 'static,
 {
-    input: ResMut<'w, ListenerInput>,
+    input: Res<'w, ListenerInput>,
     query: Query<'w, 's, D, F>,
 }
 
@@ -286,12 +276,6 @@ impl<'w, 's, D: QueryData, F: QueryFilter> Listener<'w, 's, D, F> {
     /// Returns true if the event is propagated. Ie. it is not the root event.
     pub fn is_propagated(&self) -> bool {
         self.event_type().is_propagated()
-    }
-
-    #[inline]
-    /// Stop propagation of the event.
-    pub fn stop_propagation(&mut self) {
-        self.input.propagate = false;
     }
 
     #[inline]
@@ -494,3 +478,67 @@ impl<'a> AddCallbackExt for EntityCommands<'a> {
 }
 
 impl<'a> AddEntityCallbackExt for EntityCommands<'a> {}
+
+#[test]
+// this tests if events are propagated up the tree and if it stops when the event is despawned
+fn test_propagate_events() {
+    #[derive(Component)]
+    struct Stop;
+
+    #[derive(Component)]
+    struct Marker;
+
+    #[derive(Component)]
+    struct TestEvent;
+
+    impl Listenable for TestEvent {
+        fn entity_contains(entity: EntityRef) -> bool {
+            entity.contains::<Self>()
+        }
+    }
+
+    fn callback(
+        mut commands: Commands,
+        input: Listener<(Entity, &Target)>,
+        stop: Query<(), With<Stop>>,
+    ) {
+        let (event, target) = input.event();
+        commands.entity(target.0).insert(Marker);
+        if dbg!(stop.contains(target.0)) {
+            commands.entity(event).despawn();
+        }
+    }
+
+    let mut world = World::new();
+
+    world.init_resource::<EventEntities>();
+    let mut schedule = Schedule::default();
+    schedule.add_systems(event_listener_system_configs());
+
+    let mut entities = Vec::new();
+    for i in 0..10 {
+        let entity = world
+            .spawn_empty()
+            .entity_callback::<TestEvent, _>(callback)
+            .id();
+        if i > 0 {
+            world.entity_mut(entity).add_child(entities[i - 1]);
+        }
+        if i == 5 {
+            world.entity_mut(entity).insert(Stop);
+        }
+        entities.push(entity);
+    }
+
+    crate::send_event(&mut world, (TestEvent, Target(entities[0])));
+    schedule.run(&mut world);
+
+    for (n, entity) in entities.into_iter().enumerate() {
+        dbg!(n, world.entity(entity).contains::<Marker>());
+        if n > 5 {
+            assert!(!world.entity(entity).contains::<Marker>());
+        } else {
+            assert!(world.entity(entity).contains::<Marker>());
+        }
+    }
+}
