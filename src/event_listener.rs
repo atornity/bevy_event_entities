@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use bevy_app::{Plugin, PreUpdate};
+use bevy_app::{App, Plugin, PreUpdate};
 use bevy_ecs::{
     all_tuples,
     entity::Entities,
@@ -125,9 +125,7 @@ pub fn run_callbacks(world: &mut World, mut reader: Local<EventEntityReader>) {
             for (callback_entity, ident, parent) in query.iter(world) {
                 if target.and_then(|t| parent.map(|p| p.get() == t)).unwrap_or(true)
                     && ident.entity_contains(world.entity(event.id()))
-                    && world.entities().contains(callback_entity)
                     && event.entities_contains(world.entities())
-                    && parent.map(|p| world.entities().contains(p.get())).unwrap_or(true)
                 {
                     trace!("running callback {callback_entity:?} for event {event:?} with target {target:?}");
                     queue.push(move |world: &mut World| {
@@ -272,46 +270,48 @@ impl<'w, 's, D: QueryData, F: QueryFilter> Listener<'w, 's, D, F> {
         self.input.event_type
     }
 
-    #[inline]
     /// Returns true if the event is propagated. Ie. it is not the root event.
+    #[inline]
     pub fn is_propagated(&self) -> bool {
         self.event_type().is_propagated()
     }
 
-    #[inline]
     /// Retrieve an immutable reference to the event data from the query.
     ///
     /// # Panics
     ///
     /// Will panic if the entity is not in the query.
+    #[inline]
+    #[track_caller]
     pub fn event(&self) -> ROQueryItem<'_, D> {
         self.get_event().unwrap()
     }
 
-    #[inline]
     /// Retrieve a mutable reference to the event data from the query.
     ///
     /// # Panics
     ///
     /// Will panic if the entity is not in the query.
+    #[inline]
+    #[track_caller]
     pub fn event_mut(&mut self) -> QueryItem<'_, D> {
         self.get_event_mut().unwrap()
     }
 
-    #[inline]
     /// Retrieve an immutable reference to the event data from the query.
+    #[inline]
     pub fn get_event(&self) -> Result<ROQueryItem<'_, D>, bevy_ecs::query::QueryEntityError> {
         self.query.get(self.input.event_type.id())
     }
 
-    #[inline]
     /// Retrieve a mutable reference to the event data from the query.
+    #[inline]
     pub fn get_event_mut(&mut self) -> Result<QueryItem<'_, D>, bevy_ecs::query::QueryEntityError> {
         self.query.get_mut(self.input.event_type.id())
     }
 
-    #[inline]
     /// Returns the entity of the event or the Propagated(entity) if the event is propagated
+    #[inline]
     pub fn id(&self) -> Entity {
         self.input.event_type.id()
     }
@@ -429,6 +429,13 @@ pub trait AddEntityCallbackExt: AddCallbackExt {
         callback: impl IntoCallback<T, M>,
     ) -> &mut Self {
         self.add_callback::<(Target, T), _>(callback.into_bundle().1);
+        self
+    }
+}
+
+impl AddCallbackExt for App {
+    fn add_callback<T: Listenable, M>(&mut self, callback: impl IntoCallback<T, M>) -> &mut Self {
+        self.world.add_callback(callback);
         self
     }
 }
