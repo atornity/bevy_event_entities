@@ -1,6 +1,7 @@
 use std::{
     borrow::Cow,
     marker::PhantomData,
+    mem,
     panic::{self, AssertUnwindSafe},
 };
 
@@ -114,9 +115,18 @@ pub fn propagate_events(
     }
 }
 
-pub fn run_callbacks(world: &mut World, mut reader: Local<EventEntityReader>) {
-    // TODO: Find a way to avoid this clone
-    let events = world.resource::<EventEntities>().clone();
+pub fn run_callbacks(
+    world: &mut World,
+    mut reader: Local<EventEntityReader>,
+    mut events: Local<EventEntities>,
+) {
+    // we can't use `resource_scope` here because then callbacks would not be able to send new events.
+    mem::swap(
+        world
+            .resource_mut::<EventEntities>()
+            .bypass_change_detection(),
+        &mut events,
+    );
 
     let mut queue = CommandQueue::default();
     for event in reader.read(&events) {
@@ -178,7 +188,6 @@ pub fn run_callbacks(world: &mut World, mut reader: Local<EventEntityReader>) {
                             );
                         },
                     );
-                    // callback.run(world);
 
                     // restore the target to the previous value
                     event.swap_target(world);
@@ -193,6 +202,11 @@ pub fn run_callbacks(world: &mut World, mut reader: Local<EventEntityReader>) {
         queue.apply(world);
         world.remove_resource::<ListenerInput>();
     }
+
+    // add any new events
+    let mut new_events = world.resource_mut::<EventEntities>();
+    events.extend(new_events.drain());
+    mem::swap(new_events.bypass_change_detection(), &mut events);
 }
 
 pub trait SendEntityEventExt {
@@ -263,7 +277,7 @@ impl EventType {
                 let swap = || unsafe {
                     let mut src = cell.get_entity(*entity)?.get_mut::<Target>()?;
                     let mut dst = cell.get_entity(*event)?.get_mut::<Target>()?;
-                    std::mem::swap(&mut src.0, &mut dst.0);
+                    mem::swap(&mut src.0, &mut dst.0);
                     Some(())
                 };
                 swap().is_some()
