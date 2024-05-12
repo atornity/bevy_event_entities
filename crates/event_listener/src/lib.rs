@@ -1,4 +1,8 @@
-use std::marker::PhantomData;
+use std::{
+    borrow::Cow,
+    marker::PhantomData,
+    panic::{self, AssertUnwindSafe},
+};
 
 use bevy_app::{App, Plugin, PreUpdate};
 use bevy_ecs::{
@@ -7,7 +11,7 @@ use bevy_ecs::{
     prelude::*,
     query::{QueryData, QueryFilter, QueryItem, ROQueryItem},
     schedule::{IntoSystemConfigs, ScheduleLabel, SystemConfigs},
-    system::{BoxedSystem, CommandQueue, EntityCommands, IntoSystem, SystemId, SystemParam},
+    system::{BoxedSystem, CommandQueue, EntityCommands, IntoSystem, SystemParam},
     world::World,
 };
 use bevy_hierarchy::{BuildWorldChildren, Parent};
@@ -111,69 +115,84 @@ pub fn propagate_events(
 }
 
 pub fn run_callbacks(world: &mut World, mut reader: Local<EventEntityReader>) {
-    world.resource_scope::<EventEntities, _>(|world: &mut World, events| {
-        world.insert_resource(ListenerInput { event_type: EventType::PLACEHOLDER });
-        let mut queue = CommandQueue::default();
-        for event in reader.read(&events) {
-            let Some(target) = world.get_entity(event).map(|e| e.get::<Target>().map(|t| t.0)) else {
-                continue;
-            };
+    // TODO: Find a way to avoid this clone
+    let events = world.resource::<EventEntities>().clone();
 
-            let event = match world.get::<PropagatedEvent>(event) {
-                Some(p) => EventType::Propagated { event: p.0, propagated: event },
-                None => EventType::Event(event),
-            };
+    let mut queue = CommandQueue::default();
+    for event in reader.read(&events) {
+        let Some(target) = world
+            .get_entity(event)
+            .map(|e| e.get::<Target>().map(|t| t.0))
+        else {
+            continue;
+        };
 
-            if !world.entities().contains(event.id()) {
-                continue;
-            }
+        let event = match world.get::<PropagatedEvent>(event) {
+            Some(p) => EventType::Propagated {
+                event: p.0,
+                propagated: event,
+            },
+            None => EventType::Event(event),
+        };
 
-            let mut query = world.query::<(Entity, &CallbackIdent, Option<&Parent>)>();
-            for (callback_entity, ident, parent) in query.iter(world) {
-                if target.and_then(|t| parent.map(|p| p.get() == t)).unwrap_or(true)
-                    && ident.entity_contains(world.entity(event.id()))
-                    && event.entities_contains(world.entities())
-                {
-                    trace!("running callback {callback_entity:?} for event {event:?} with target {target:?}");
-                    queue.push(move |world: &mut World| {
-                        if !event.entities_contains(world.entities()) {
-                            trace!("event {:?} no longer exists", event.id());
-                            return;
-                        }
+        if !world.entities().contains(event.id()) {
+            continue;
+        }
 
-                        // set the input for the callback
-                        let mut input = world.resource_mut::<ListenerInput>();
+        let mut query = world.query::<(Entity, &CallbackIdent, Option<&Parent>)>();
+        for (callback_entity, ident, parent) in query.iter(world) {
+            if target
+                .and_then(|t| parent.map(|p| p.get() == t))
+                .unwrap_or(true)
+                && ident.entity_contains(world.entity(event.id()))
+                && event.entities_contains(world.entities())
+            {
+                trace!("running callback {callback_entity:?} for event {event:?} with target {target:?}");
+                queue.push(move |world: &mut World| {
+                    if !event.entities_contains(world.entities()) {
+                        trace!("event {:?} no longer exists", event.id());
+                        return;
+                    }
 
-                        input.event_type = event;
+                    // set the input for the callback
+                    world.insert_resource(ListenerInput { event_type: event });
 
-                        // take the callback from the entity temporarily to run it
-                        let Some(mut callback) = world
-                            .get_entity_mut(callback_entity)
-                            .and_then(|mut c| c.take::<CallbackSystem>())
-                        else {
-                            return;
-                        };
+                    // take the callback from the entity temporarily to run it
+                    let Some(mut callback) = world
+                        .get_entity_mut(callback_entity)
+                        .and_then(|mut c| c.take::<CallbackSystemInner>())
+                    else {
+                        return;
+                    };
 
-                        // replace the target of the propagated event with the target of the actual event.
-                        event.swap_target(world);
+                    // replace the target of the propagated event with the target of the actual event.
+                    event.swap_target(world);
 
-                        // run the callback
-                        callback.run(world);
+                    // run the callback
+                    let name = callback.name();
+                    panic::catch_unwind(AssertUnwindSafe(|| callback.run(world))).unwrap_or_else(
+                        |_| {
+                            panic!(
+                                "Encountered a panic in callback system `{name}`!
+                callback: {callback_entity:?}, event: {event:?}, target: {target:?}"
+                            );
+                        },
+                    );
+                    // callback.run(world);
 
-                        // restore the target to the previous value
-                        event.swap_target(world);
+                    // restore the target to the previous value
+                    event.swap_target(world);
 
-                        // put the callback back into the entity if it still exists
-                        if let Some(mut e) = world.get_entity_mut(callback_entity) {
-                            e.insert(callback);
-                        }
-                    });
-                }
+                    // put the callback back into the entity if it still exists
+                    if let Some(mut e) = world.get_entity_mut(callback_entity) {
+                        e.insert(callback);
+                    }
+                });
             }
         }
         queue.apply(world);
         world.remove_resource::<ListenerInput>();
-    })
+    }
 }
 
 pub trait SendEntityEventExt {
@@ -205,8 +224,6 @@ pub enum EventType {
 }
 
 impl EventType {
-    const PLACEHOLDER: Self = EventType::Event(Entity::PLACEHOLDER);
-
     #[inline]
     pub fn is_propagated(&self) -> bool {
         matches!(self, EventType::Propagated { .. })
@@ -352,25 +369,63 @@ impl CallbackIdent {
 }
 
 #[derive(Component)]
-pub enum CallbackSystem {
+pub enum CallbackSystemInner {
     Pending(Option<BoxedSystem>),
-    Ready(SystemId),
+    Ready(BoxedSystem),
+}
+
+pub struct CallbackSystem {
+    inner: CallbackSystemInner,
+    name: Cow<'static, str>,
 }
 
 impl CallbackSystem {
     pub fn new<M>(system: impl IntoSystem<(), (), M>) -> Self {
+        let system: Box<dyn System<In = (), Out = ()>> = Box::new(IntoSystem::into_system(system));
+        let name = system.name();
+        Self {
+            inner: CallbackSystemInner::Pending(Some(system)),
+            name,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn run(&mut self, world: &mut World) {
+        self.inner.run(world);
+    }
+}
+
+impl CallbackSystemInner {
+    pub fn new<M>(system: impl IntoSystem<(), (), M>) -> Self {
         Self::Pending(Some(Box::new(IntoSystem::into_system(system))))
+    }
+
+    pub fn name(&self) -> Cow<'static, str> {
+        match self {
+            CallbackSystemInner::Pending(system) => system.as_ref().unwrap().name(),
+            CallbackSystemInner::Ready(system) => system.name(),
+        }
     }
 
     pub fn run(&mut self, world: &mut World) {
         match self {
-            CallbackSystem::Pending(system) => {
-                let id = world.register_boxed_system(system.take().unwrap());
-                world.run_system(id).unwrap();
-                *self = CallbackSystem::Ready(id);
+            CallbackSystemInner::Pending(system) => {
+                let mut system = system.take().unwrap();
+                system.initialize(world);
+                system.run((), world);
+                system.apply_deferred(world);
+                *self = CallbackSystemInner::Ready(system);
+                // let id = world.register_boxed_system(system.take().unwrap());
+                // world.run_system(id).unwrap();
+                // *self = CallbackSystemInner::Ready(id);
             }
-            CallbackSystem::Ready(id) => {
-                world.run_system(*id).unwrap();
+            CallbackSystemInner::Ready(system) => {
+                system.run((), world);
+                system.apply_deferred(world);
+                // world.run_system(*id).unwrap();
             }
         }
     }
@@ -379,7 +434,7 @@ impl CallbackSystem {
 #[derive(Component)]
 pub struct On<T: Listenable> {
     ident: CallbackIdent,
-    system: CallbackSystem,
+    system: CallbackSystemInner,
     marker: PhantomData<T>,
 }
 
@@ -388,37 +443,37 @@ impl<T: Listenable> On<T> {
         Self {
             marker: PhantomData,
             ident: CallbackIdent::new::<T>(),
-            system: CallbackSystem::new(system),
+            system: CallbackSystemInner::new(system),
         }
     }
 
-    fn into_bundle(self) -> (CallbackIdent, CallbackSystem) {
+    fn into_bundle(self) -> (CallbackIdent, CallbackSystemInner) {
         (self.ident, self.system)
     }
 }
 
 pub trait IntoCallback<T, M>: Send + Sync + 'static {
-    fn into_bundle(self) -> (CallbackIdent, CallbackSystem);
+    fn into_bundle(self) -> (CallbackIdent, CallbackSystemInner);
 }
 
 impl<T: Listenable> IntoCallback<T, ()> for On<T> {
     #[inline]
-    fn into_bundle(self) -> (CallbackIdent, CallbackSystem) {
+    fn into_bundle(self) -> (CallbackIdent, CallbackSystemInner) {
         self.into_bundle()
     }
 }
 
-impl<T: Listenable> IntoCallback<T, ()> for CallbackSystem {
+impl<T: Listenable> IntoCallback<T, ()> for CallbackSystemInner {
     #[inline]
-    fn into_bundle(self) -> (CallbackIdent, CallbackSystem) {
+    fn into_bundle(self) -> (CallbackIdent, CallbackSystemInner) {
         (CallbackIdent::new::<T>(), self)
     }
 }
 
 impl<M, T: Listenable, S: IntoSystem<(), (), M> + Send + Sync + 'static> IntoCallback<T, M> for S {
     #[inline]
-    fn into_bundle(self) -> (CallbackIdent, CallbackSystem) {
-        (CallbackIdent::new::<T>(), CallbackSystem::new(self))
+    fn into_bundle(self) -> (CallbackIdent, CallbackSystemInner) {
+        (CallbackIdent::new::<T>(), CallbackSystemInner::new(self))
     }
 }
 
