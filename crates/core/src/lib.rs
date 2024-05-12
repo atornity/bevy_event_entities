@@ -149,6 +149,12 @@ pub struct EventSequence {
     start_event_count: usize,
 }
 
+impl EventSequence {
+    pub fn into_inner(self) -> Vec<Entity> {
+        self.events
+    }
+}
+
 impl Deref for EventSequence {
     type Target = Vec<Entity>;
 
@@ -175,6 +181,10 @@ impl EventEntities {
     pub fn push(&mut self, event: Entity) {
         self.events_b.push(event);
         self.event_count += 1;
+    }
+
+    pub fn into_inner(self) -> (EventSequence, EventSequence) {
+        (self.events_a, self.events_b)
     }
 
     /// Returns an iterator over the events in the `EventEntities` resource.
