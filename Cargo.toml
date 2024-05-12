@@ -6,6 +6,11 @@ name = "bevy_event_entities"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+derive = ["bevy_event_entities_derive"]
+event_listener = ["bevy_event_entities_listener"]
+default = ["derive", "event_listener"]
+
 
 [[bench]]
 name = "event_listener"
@@ -27,8 +32,8 @@ bevy_log = { workspace = true }
 bevy_hierarchy = { workspace = true }
 bevy_ecs = { workspace = true }
 bevy_event_entities_core = { path = "./crates/core" }
-bevy_event_entities_derive = { path = "./crates/derive" }
-bevy_event_entities_listener = { path = "./crates/event_listener" }
+bevy_event_entities_derive = { path = "./crates/derive", optional = true }
+bevy_event_entities_listener = { path = "./crates/event_listener", optional = true }
 
 [dev-dependencies]
 bevy = "0.13.2"
