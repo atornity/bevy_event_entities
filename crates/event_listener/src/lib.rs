@@ -22,7 +22,9 @@ use bevy_event_entities_core::{
 pub use bevy_ecs::world::EntityRef;
 
 pub mod prelude {
-    pub use crate::{AddCallbackExt, EventListenerPlugin, Listenable, SendEntityEventExt, Target};
+    pub use crate::{
+        AddCallbackExt, EventListenerPlugin, Listenable, Listener, SendEntityEventExt, Target,
+    };
 }
 
 // TODO: when hooks arrive, automatically run callbacks when a `Listenable` is added to an entity
