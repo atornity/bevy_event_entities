@@ -1,5 +1,5 @@
 [workspace]
-members = ["./bevy_event_entities_derive"]
+members = ["./crates/derive", "./crates/event_listener", "./crates/core"]
 
 [package]
 name = "bevy_event_entities"
@@ -11,14 +11,24 @@ edition = "2021"
 name = "event_listener"
 harness = false
 
-[dependencies]
+[workspace.dependencies]
 bevy_reflect = "0.13.2"
 bevy_app = "0.13.2"
 bevy_utils = "0.13.2"
 bevy_log = "0.13.2"
 bevy_ecs = "0.13.2"
 bevy_hierarchy = "0.13.2"
-bevy_event_entities_derive = { path = "./bevy_event_entities_derive" }
+
+[dependencies]
+bevy_reflect = { workspace = true }
+bevy_app = { workspace = true }
+bevy_utils = { workspace = true }
+bevy_log = { workspace = true }
+bevy_hierarchy = { workspace = true }
+bevy_ecs = { workspace = true }
+bevy_event_entities_core = { path = "./crates/core" }
+bevy_event_entities_derive = { path = "./crates/derive" }
+bevy_event_entities_listener = { path = "./crates/event_listener" }
 
 [dev-dependencies]
 bevy = "0.13.2"

@@ -1,0 +1,13 @@
+[package]
+name = "bevy_event_entities_listener"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+bevy_reflect = { workspace = true }
+bevy_app = { workspace = true }
+bevy_utils = { workspace = true }
+bevy_log = { workspace = true }
+bevy_ecs = { workspace = true }
+bevy_hierarchy = { workspace = true }
+bevy_event_entities_core = { path = "../core" }

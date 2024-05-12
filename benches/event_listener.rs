@@ -28,7 +28,7 @@ fn setup() -> (World, Schedule) {
     (false, 1_000, 1), (true, 1_000, 1),
     (false, 1, 1_000), (true, 1, 1_000),
 ])]
-fn nested((switch, depth, n): (bool, usize, usize)) {
+fn nested((run, depth, n): (bool, usize, usize)) {
     let callback = |input: Listener<&MyEvent>| {
         assert_eq!(69, input.event().num);
     };
@@ -52,7 +52,7 @@ fn nested((switch, depth, n): (bool, usize, usize)) {
 
     send_event(&mut world, MyEvent { num: 69 }).insert(Target(entity));
 
-    if switch {
+    if run {
         schedule.run(&mut world);
     }
 }

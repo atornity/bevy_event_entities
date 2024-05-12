@@ -15,10 +15,15 @@ use bevy_log::trace;
 use bevy_reflect::Reflect;
 use bevy_utils::intern::Interned;
 
-use crate::{any_events, EventEntities, EventEntityReader, QueryEventReader, SendEventExt};
+use bevy_event_entities_core::{
+    any_events, EventEntities, EventEntityReader, QueryEventReader, SendEventExt,
+};
 
 pub use bevy_ecs::world::EntityRef;
-pub use bevy_event_entities_derive::Listenable;
+
+pub mod prelude {
+    pub use crate::{AddCallbackExt, EventListenerPlugin, Listenable, SendEntityEventExt, Target};
+}
 
 // TODO: when hooks arrive, automatically run callbacks when a `Listenable` is added to an entity
 pub trait Listenable: Send + Sync + 'static {
@@ -472,9 +477,11 @@ impl<'a> AddCallbackExt for EntityCommands<'a> {
     }
 }
 
-#[test]
 // this tests if events are propagated up the tree and if it stops when the event is despawned
+#[test]
 fn test_propagate_events() {
+    use bevy_event_entities_core::send_event;
+
     #[derive(Component)]
     struct Stop;
 
@@ -523,7 +530,7 @@ fn test_propagate_events() {
         entities.push(entity);
     }
 
-    crate::send_event(&mut world, (TestEvent, Target(entities[0])));
+    send_event(&mut world, (TestEvent, Target(entities[0])));
     schedule.run(&mut world);
 
     for (n, entity) in entities.into_iter().enumerate() {
