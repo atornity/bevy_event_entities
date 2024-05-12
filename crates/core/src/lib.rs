@@ -180,8 +180,8 @@ impl EventEntities {
     /// Returns an iterator over the events in the `EventEntities` resource.
     ///
     /// This does not keep track of visited events. Use [`EventEntitiesReader`] for that.
-    pub fn iter(&self) -> impl Iterator<Item = &Entity> + '_ {
-        self.events_a.iter().chain(self.events_b.iter())
+    pub fn iter(&self) -> impl Iterator<Item = Entity> + '_ {
+        self.events_a.iter().chain(self.events_b.iter()).copied()
     }
 
     #[inline]
